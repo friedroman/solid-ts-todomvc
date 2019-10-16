@@ -1,36 +1,61 @@
 {
-  "name": "solid-todomvc",
-  "version": "0.11.0",
-  "description": "Solid implementation of TodoMVC",
+  "name": "va-adm",
+  "version": "0.1.0",
+  "description": "VAFlow Admin Panel",
   "scripts": {
-    "start": "rollup -w -c",
-    "build": "rollup -c --environment production"
+    "start": "node fuse.js",
+    "startwp": "webpack-dev-server --progress --color --mode development --config webpack.config",
+    "buildwp": "webpack --color --mode production --config webpack.config.js",
+    "lint": "eslint ./"
   },
   "keywords": [
     "solid",
-    "javascript",
-    "framework",
-    "todomvc"
+    "admin",
+    "typescript"
   ],
-  "author": "Ryan Carniato",
+  "author": "Roman Friedman",
   "license": "MIT",
-  "homepage": "https://github.com/ryansolid/solid-todomvc",
+  "homepage": "https://github.com/friedrom/va-adm",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ryansolid/solid-todomvc.git"
+    "url": "https://github.com/friedrom/va-adm"
   },
   "private": true,
   "dependencies": {
-    "solid-js": "0.11.0"
+    "babel-plugin-jsx-dom-expressions": "~0.12.2",
+    "@babel/runtime-corejs3": "^7.6.2",
+    "@types/gsap": "^1.20.2",
+    "core-js": "^3.3.2",
+    "gsap": "^2.1.3",
+    "solid-js": "^0.11.4",
+    "tslib": "^1.10.0",
+    "todomvc-app-css": "^2.3.0",
+    "todomvc-common": "^1.0.5",
+    "idb": "^4.0.5"
   },
   "devDependencies": {
     "@babel/core": "^7.6.2",
-    "babel-preset-solid": "0.1.1",
-    "rollup": "1.21.4",
-    "rollup-plugin-babel": "4.3.3",
-    "rollup-plugin-node-resolve": "5.2.0",
-    "rollup-plugin-terser": "5.1.1",
-    "todomvc-app-css": "^2.2.0",
-    "todomvc-common": "^1.0.5"
+    "@babel/plugin-transform-runtime": "^7.6.2",
+    "@babel/preset-env": "^7.6.2",
+    "@typescript-eslint/eslint-plugin": "^2.3.3",
+    "@typescript-eslint/parser": "^2.3.3",
+    "babel-loader": "8.0.6",
+    "babel-preset-solid": "^0.1.1",
+    "cross-env": "^6.0.3",
+    "eslint": "^6.5.1",
+    "eslint-config-prettier": "^6.4.0",
+    "eslint-plugin-prettier": "^3.1.1",
+    "fork-ts-checker-notifier-webpack-plugin": "^1.0.2",
+    "fork-ts-checker-webpack-plugin": "^1.5.1",
+    "fuse-box": "^3.7.1",
+    "html-webpack-plugin": "^4.0.0-beta.8",
+    "prettier": "1.18.2",
+    "terser": "^4.3.8",
+    "ts-loader": "^6.2.0",
+    "typescript": "^3.6.3",
+    "uglify-js": "^3.6.1",
+    "webpack": "^4.41.1",
+    "webpack-cli": "^3.3.9",
+    "webpack-dev-server": "^3.8.2"
   }
 }
