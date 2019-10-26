@@ -2,7 +2,9 @@
 
 const ForkTsCheckerNotifierWebpackPlugin = require('fork-ts-checker-notifier-webpack-plugin');
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+const ts = require('ts-loader');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const {forkTsCheckerOptions, tsLoaderOptions} = require(`pnp-webpack-plugin`);
 const path = require('path');
 
 
@@ -18,17 +20,20 @@ module.exports = {
   module: {
     rules: [
       {
+        test: /\.scss$/i,
+        use: ['style-loader', 'css-loader', 'sass-loader'],
+      }, {
         test: /\.css$/i,
         use: ['style-loader', 'css-loader'],
       }, {
-        test: /\.tsx?$/,
+        test: /\.[jt]sx?$/,
         use: [
           {
             loader: 'babel-loader',
             options: {
               presets: [
                 "@babel/env",
-                "babel-preset-solid"
+                "solid"
               ],
               plugins: [
                 ['@babel/plugin-transform-runtime', {corejs: 3, useJSModules: true}]
@@ -36,19 +41,19 @@ module.exports = {
             }
           },
           {
-            loader: 'ts-loader',
-            options: {
+            loader: ts,
+            options: tsLoaderOptions( {
               transpileOnly: true,
               logLevel: 'INFO',
               experimentalWatchApi: true
-            },
+            }),
           }
         ],
       }
     ]
   },
   resolve: {
-    extensions: ['.ts', '.tsx', '.js', '.jsx']
+    extensions: ['.ts', '.ts.d', '.tsx', '.js', '.jsx', '.css', '.scss']
   },
   devServer: {
     clientLogLevel: 'warning',
@@ -57,7 +62,7 @@ module.exports = {
     stats: 'errors-only'
   },
   plugins: [
-    new ForkTsCheckerWebpackPlugin({eslint: true, useTypescriptIncrementalApi: true }),
+    new ForkTsCheckerWebpackPlugin(forkTsCheckerOptions({eslint: true, useTypescriptIncrementalApi: true })),
     new ForkTsCheckerNotifierWebpackPlugin({title: 'VA Admin TypeScript', excludeWarnings: false}),
     new HtmlWebpackPlugin({
       inject: true,

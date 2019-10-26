@@ -1,20 +1,24 @@
 {
   "compilerOptions": {
-    "target": "es2015",
+    "target": "es2017",
     "module": "es2015",
     "moduleResolution": "node",
     "jsx": "preserve",
     "strict": true,
     "baseUrl": "src",
     "outDir": "./build/ts",
+    "incremental": true,
+    "importHelpers": true,
     "sourceMap": true,
     "allowJs": true,
     "checkJs": true,
     "emitDecoratorMetadata": true,
-    "experimentalDecorators": true
+    "experimentalDecorators": true,
+    "typeRoots" : ["./src", "@types", "node_modules/@types","./src/types"]
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.tsx",
+    "src/**/*.ts.d"
   ]
 }
