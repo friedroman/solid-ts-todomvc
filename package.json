@@ -3,9 +3,8 @@
   "version": "0.1.0",
   "description": "VAFlow Admin Panel",
   "scripts": {
-    "start": "node fuse.js",
-    "startwp": "webpack-dev-server --progress --color --mode development --config webpack.config",
-    "buildwp": "webpack --color --mode development --config webpack.config.js",
+    "start": "webpack-dev-server --progress --color --mode development --config webpack.config",
+    "build": "webpack --color --mode production --config webpack.config.js",
     "lint": "eslint ./"
   },
   "keywords": [
@@ -21,16 +20,18 @@
     "url": "https://github.com/friedrom/va-adm"
   },
   "private": true,
+  "browserslist": [
+    "last 2 versions",
+    "> 1%",
+    "not dead"
+  ],
   "dependencies": {
     "@babel/runtime-corejs3": "^7.6.2",
-    "@types/gsap": "^1.20.2",
-    "babel-plugin-jsx-dom-expressions": "0.13.2",
+    "babel-plugin-jsx-dom-expressions": "^0.14.0",
+    "bulma": "^0.8.0",
     "core-js": "3.3.4",
-    "gsap": "^2.1.3",
     "idb": "^4.0.5",
-    "solid-js": "0.12.0",
-    "todomvc-app-css": "^2.3.0",
-    "todomvc-common": "^1.0.5",
+    "solid-js": "^0.13.0",
     "tslib": "^1.10.0"
   },
   "devDependencies": {
@@ -40,16 +41,15 @@
     "@typescript-eslint/eslint-plugin": "2.5.0",
     "@typescript-eslint/parser": "^2.5.0",
     "babel-loader": "8.0.6",
-    "babel-preset-solid": "^0.2.0",
+    "babel-preset-solid": "~0.2.1",
     "cross-env": "^6.0.3",
     "eslint": "^6.6.0",
     "eslint-config-prettier": "^6.4.0",
     "eslint-plugin-prettier": "^3.1.1",
     "fork-ts-checker-notifier-webpack-plugin": "^1.0.2",
-    "fork-ts-checker-webpack-plugin": "2.0.0",
+    "fork-ts-checker-webpack-plugin": "^3.0.1",
     "html-webpack-plugin": "^4.0.0-beta.8",
     "node-sass": "^4.13.0",
-    "pnp-webpack-plugin": "^1.5.0",
     "prettier": "1.18.2",
     "sass-loader": "^8.0.0",
     "terser": "^4.3.9",

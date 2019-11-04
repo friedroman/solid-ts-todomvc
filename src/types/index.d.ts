@@ -7,7 +7,7 @@ declare global {
       (e: E & { currentTarget: T }, model?: unknown): void;
     }
 
-      // eslint-disable-next-line @typescript-eslint/no-empty-interface
+    // eslint-disable-next-line @typescript-eslint/no-empty-interface
     interface DOMAttributes<T> extends CustomAttributes<T> {
       onDblClick?: EventHandler<T, MouseEvent>;
     }

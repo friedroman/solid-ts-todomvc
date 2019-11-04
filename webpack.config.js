@@ -4,8 +4,8 @@ const ForkTsCheckerNotifierWebpackPlugin = require('fork-ts-checker-notifier-web
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
 const ts = require('ts-loader');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const {forkTsCheckerOptions, tsLoaderOptions} = require(`pnp-webpack-plugin`);
 const path = require('path');
+const webpack = require('webpack');
 
 
 module.exports = {
@@ -20,20 +20,22 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.scss$/i,
+        test: /\.s[ac]ss$/i,
         use: ['style-loader', 'css-loader', 'sass-loader'],
       }, {
         test: /\.css$/i,
         use: ['style-loader', 'css-loader'],
       }, {
         test: /\.[jt]sx?$/,
+        exclude: /node_modules/,
         use: [
           {
             loader: 'babel-loader',
             options: {
+              cacheDirectory: true,
               presets: [
                 "@babel/env",
-                "solid"
+                "solid",
               ],
               plugins: [
                 ['@babel/plugin-transform-runtime', {corejs: 3, useJSModules: true}]
@@ -41,12 +43,12 @@ module.exports = {
             }
           },
           {
-            loader: ts,
-            options: tsLoaderOptions( {
+            loader: 'ts-loader',
+            options: {
               transpileOnly: true,
               logLevel: 'INFO',
               experimentalWatchApi: true
-            }),
+            },
           }
         ],
       }
@@ -62,7 +64,7 @@ module.exports = {
     stats: 'errors-only'
   },
   plugins: [
-    new ForkTsCheckerWebpackPlugin(forkTsCheckerOptions({eslint: true, useTypescriptIncrementalApi: true })),
+    new ForkTsCheckerWebpackPlugin({eslint: true, useTypescriptIncrementalApi: true }),
     new ForkTsCheckerNotifierWebpackPlugin({title: 'VA Admin TypeScript', excludeWarnings: false}),
     new HtmlWebpackPlugin({
       inject: true,

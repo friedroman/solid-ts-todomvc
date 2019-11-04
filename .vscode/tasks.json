@@ -5,9 +5,9 @@
     "tasks": [
         {
             "type": "npm",
-            "script": "startwp",
+            "script": "start",
             "problemMatcher": [
-                "$ts-webpack-watch"
+                "$ts-checker-eslint-webpack-watch"
             ],
             "group": "build",
             "isBackground": true
@@ -16,18 +16,10 @@
             "type": "npm",
             "script": "build",
             "group": "build",
-            "isBackground": true
-        },
-        {
-            "type": "npm",
-            "script": "buildwp",
+            "isBackground": false,
             "problemMatcher": [
-                "$ts-webpack"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
+                "$ts-checker-eslint-webpack"
+            ]
         }
     ]
 }
