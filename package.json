@@ -1,7 +1,7 @@
 {
-  "name": "va-adm",
+  "name": "solid-ts-todomvc",
   "version": "0.1.0",
-  "description": "VAFlow Admin Panel",
+  "description": "TodoMVC implemented in Typescript using Solid-js",
   "scripts": {
     "start": "webpack-dev-server --progress --color --mode development --config webpack.config",
     "build": "webpack --color --mode production --config webpack.config.js",
@@ -23,10 +23,10 @@
   ],
   "author": "Roman Friedman",
   "license": "MIT",
-  "homepage": "https://github.com/friedrom/va-adm",
+  "homepage": "https://github.com/friedrom/solid-ts-todomvc",
   "repository": {
     "type": "git",
-    "url": "https://github.com/friedrom/va-adm"
+    "url": "https://github.com/friedrom/solid-ts-todomvc"
   },
   "private": true,
   "test": "jest",
