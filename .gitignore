@@ -2,3 +2,4 @@ build/
 dist/
 node_modules
 .fusebox
+*.mp4

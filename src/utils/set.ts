@@ -1,4 +1,4 @@
-import { SetStateFunction, StatePath } from "solid-js";
+import { SetStateFunction } from "solid-js";
 import { deepEqual, setInArray, setInObject } from "./utils";
 import {
   Accessor,
@@ -7,6 +7,7 @@ import {
   AccessorTargetType,
   getAccessorChain,
   getFromAccessorChain,
+  idPredicate,
   isAccessById,
   isAccessChain,
   isAccessFunc,
@@ -20,7 +21,9 @@ export type ValueTransformer<A extends Accessor<any>> =
   | AccessorTargetType<A>
   | ((value: AccessorTargetType<A>) => AccessorTargetType<A>);
 
-export type ValueTransformTarget<T> = T extends ValueTransformer<infer A>
+export type ValueTransformTarget<T extends ValueTransformer<any>> = T extends ValueTransformer<
+  infer A
+>
   ? AccessorTargetType<A>
   : T;
 
@@ -83,7 +86,7 @@ export const commitPersistent = <R = any>(root: R, mutations: Mutations): R => {
  *    shares references to all of the inner containers of the previous value
  *    that were not affected by any of the mutations.
  *  * Not mutate the object tree in any way or delay the mutation
- *    until such time that calling code explicetly requested it,
+ *    until such time that calling code explicitly requested it,
  *    yet at the same time record all the requested mutations in a
  *    fine grained primitives-based summary of the changes to perform
  *    with their path in the object tree and and give access to them to the calling code
@@ -113,10 +116,11 @@ export class Mutagen<R> {
    */
   set<T, A extends Accessor<R, T>>(accessor: A, value: ValueTransformer<A>): this {
     let chain;
-    if (isAccessChain(accessor)) {
-      chain = accessor;
-    } else if (isAccessFunc(accessor)) {
-      chain = getAccessorChain(this.value, accessor);
+    const access = accessor as Accessor<R, T>;
+    if (isAccessChain(access)) {
+      chain = access;
+    } else if (isAccessFunc(access)) {
+      chain = getAccessorChain(this.value, access);
     } else {
       throw new Error("Unexpected accessor type");
     }
@@ -138,6 +142,11 @@ export class Mutagen<R> {
     return this;
   }
 
+  mutPathNow<T, A extends AccessorChain>(accessor: A, value: ValueTransformer<A>): this {
+    this.set(accessor, value).engage();
+    return this;
+  }
+
   mut<T, A extends AccessorFunction<R, T>>(accessor: A): Mutagen<T> {
     const accessorChain = getAccessorChain(this.value, accessor);
     const nestedGetter = () => getFromAccessorChain(this.value(), accessorChain);
@@ -146,6 +155,7 @@ export class Mutagen<R> {
       const pathPrependMutations = m.map(
         ([chain, value]) => [nestedBaseChain.concat(chain), value] as Mutation
       );
+
       this.commit(this.value(), this.mutations.concat(pathPrependMutations));
       this.mutations = [];
       return nestedGetter();
@@ -180,9 +190,10 @@ export class Mutagen<R> {
     const val = this.value;
     this.mutations = [];
     this.value = () => {
-      const r = this.commit(val(), mut);
+      let r = this.lastRoot;
+      this.value = () => r!;
+      r = this.commit(val(), mut);
       this.lastRoot = r;
-      this.value = () => r;
       return r;
     };
   }
@@ -199,12 +210,12 @@ export class Mutagen<R> {
 /**
  * Fluently mutate solid reactive tree
  */
-export function setStateMutator<R, T, A extends Accessor<R, T>>([state, setState]: [
-  R,
-  SetStateFunction<R>
-]): Mutagen<R> {
+export function setStateMutator<R>([state, setState]: [R, SetStateFunction<R>]): Mutagen<R> {
   return new Mutagen(() => state, [], [], (root, m) => {
-    const map = m.map(([chain, value]) => [...chain, value]);
+    const map = m.map(([chain, value]) => [
+      ...chain.map(part => (isAccessById(part) ? idPredicate(part[0]) : part)),
+      value,
+    ]);
     (setState as any)(...map);
     return state;
   });
@@ -218,11 +229,10 @@ export function set<R, T, A extends Accessor<R, T>>(
   accessor: A,
   value?: ValueTransformer<A>
 ): R {
+  const access = accessor as Accessor<R, T>;
   return setFromAccessorChain(
     root,
-    typeof accessor === "function"
-      ? getAccessorChain(() => root, accessor as AccessorFunction<R>)
-      : (accessor as AccessorChain),
+    isAccessFunc(access) ? getAccessorChain(() => root, access) : (accessor as AccessorChain),
     value
   );
 }

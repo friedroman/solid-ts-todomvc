@@ -16,7 +16,7 @@ const TodoApp: TodoApp = () => {
   window.addEventListener("hashchange", locationHandler);
   onCleanup(() => window.removeEventListener("hashchange", locationHandler));
 
-  return (
+  const appSection: any = (
     <section class="todoapp">
       <TodoHeader addTodo={addTodo} />
       <Show when={store.todos.length > 0}>
@@ -25,6 +25,15 @@ const TodoApp: TodoApp = () => {
       </Show>
     </section>
   );
+  const obs = new MutationObserver(mutations => console.log("DOM Mutations", mutations));
+  obs.observe(appSection, {
+    attributeOldValue: true,
+    characterDataOldValue: true,
+    subtree: true,
+    childList: true,
+  });
+  onCleanup(() => obs.disconnect());
+  return appSection;
 };
 
 const TodoHeader = ({ addTodo }: Pick<Actions, "addTodo">) => (
@@ -32,6 +41,7 @@ const TodoHeader = ({ addTodo }: Pick<Actions, "addTodo">) => (
     <h1>todos</h1>
     <input
       class="new-todo"
+      autofocus
       placeholder="What needs to be done?"
       onKeyUp={({ target, code }: KeyboardEvent) => {
         const t = target as HTMLInputElement;
@@ -97,7 +107,9 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
         <For
           each={filterList(store.todos)}
           transform={selectWhen(() => state.editingTodoId, "editing")}>
-          {todo => <TodoItem {...{ todo, isEditing, toggle, remove, setCurrent, save }} />}
+          {todo => (
+            <TodoItem {...{ todo, isEditing, toggle, remove, setCurrent, save, key: todo.id }} />
+          )}
         </For>
       </ul>
     </section>
@@ -122,7 +134,7 @@ const TodoItem = ({
     },
     onBlur = (e: Event) => saveInputValue(e);
   return (
-    <li class="todo" classList={{ completed: todo.completed }}>
+    <li class="todo" classList={{ completed: !!todo.completed }}>
       <div class="view">
         <input
           class="toggle"
