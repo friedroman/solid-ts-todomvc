@@ -55,7 +55,7 @@ module.exports = {
     ]
   },
   resolve: {
-    extensions: ['.ts', '.ts.d', '.tsx', '.js', '.jsx', '.css', '.scss']
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.css', '.scss']
   },
   devServer: {
     clientLogLevel: 'warning',
@@ -65,10 +65,10 @@ module.exports = {
   },
   plugins: [
     new ForkTsCheckerWebpackPlugin({eslint: true, useTypescriptIncrementalApi: true }),
-    new ForkTsCheckerNotifierWebpackPlugin({title: 'VA Admin TypeScript', excludeWarnings: false}),
+    new ForkTsCheckerNotifierWebpackPlugin({title: 'TodoMVC Solid', excludeWarnings: false}),
     new HtmlWebpackPlugin({
       inject: true,
-      title: "VAFlow Admin Panel",
+      title: "TodoMVC Solid Typescript",
       template: './src/index.html'
     })
   ]

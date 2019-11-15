@@ -55,3 +55,10 @@ export const objectEqual = (a: any, b: any) => {
 
   return true;
 };
+
+export const lazy = <T>(init: () => T) => {
+  let func: null | T = null;
+  return () => {
+    return func ? func : (func = init());
+  };
+};

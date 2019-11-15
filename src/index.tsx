@@ -2,6 +2,7 @@ import { createState, onCleanup } from "solid-js";
 import { For, render, selectWhen, Show } from "solid-js/dom";
 import createTodosStore, { Actions, ShowMode, Store, Todo } from "./store";
 import "babel-plugin-jsx-dom-expressions";
+import "todomvc-app-css/index";
 
 const setFocus = (el: HTMLElement) => Promise.resolve().then(() => el.focus());
 
@@ -84,10 +85,15 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
     },
     setCurrent = (todoId?: number) => setState("editingTodoId", todoId),
     save = (todoId: number, title: string) => {
-      if (state.editingTodoId === todoId && title) {
-        editTodo({ id: todoId, title, completed: false });
-        setCurrent();
+      if (state.editingTodoId !== todoId) {
+        return;
       }
+      if (title.length == 0) {
+        removeTodo(todoId);
+        return;
+      }
+      editTodo({ id: todoId, title, completed: false });
+      setCurrent();
     },
     toggle = (todoId: number, completed?: boolean) => {
       return editTodo({ id: todoId, completed: completed });

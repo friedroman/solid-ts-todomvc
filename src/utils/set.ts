@@ -2,16 +2,15 @@ import { SetStateFunction } from "solid-js";
 import { deepEqual, setInArray, setInObject } from "./utils";
 import {
   Accessor,
-  AccessorChain,
   AccessorFunction,
   AccessorTargetType,
-  getAccessorChain,
+  AccessPath,
+  getAccessFuncPath,
+  getAccessorPath,
   getFromAccessorChain,
-  idPredicate,
-  isAccessById,
-  isAccessChain,
   isAccessFunc,
-  locateById,
+  isAccessPredicate,
+  isAccessSelector,
   self,
   UnitAccessor,
 } from "./access";
@@ -21,49 +20,66 @@ export type ValueTransformer<A extends Accessor<any>> =
   | AccessorTargetType<A>
   | ((value: AccessorTargetType<A>) => AccessorTargetType<A>);
 
-export type ValueTransformTarget<T extends ValueTransformer<any>> = T extends ValueTransformer<
-  infer A
->
-  ? AccessorTargetType<A>
-  : T;
-
-export type Mutation = [AccessorChain, ValueTransformer<any>];
+export type Mutation = [AccessPath, ValueTransformer<any>];
 export type Mutations = Mutation[];
 export type CommitMutations<R> = (root: R, m: Mutations) => R;
 
 export function setFromAccessorChain<
   R extends any,
-  A extends AccessorChain,
+  A extends AccessPath,
   V extends ValueTransformer<A>
 >(root: R, accessorChain: A, value: V): R {
+  const applyValue = (r: R) => (typeof value === "function" ? value(r) : value);
   if (accessorChain.length === 0) {
     // root is the target
-    const newNode = typeof value === "function" ? value(root) : value;
+    const newNode = applyValue(root);
 
     // Return root if structural equality
     return deepEqual(root, newNode) ? root : newNode;
   } else {
     // root is a parent of the target
-    const [key, ...nextAccessors] = accessorChain;
-    // if (typeof key == 'object' && Array.isArray(root)) {
-    //   let range = key;
-    //   if ('from' in range && 'to' in range) {
-    //     const slice = root.slice(range.from, range.to);
-    //   }
-    // }
-    if (isAccessById(key)) {
-      const item = locateById(root, key[0]);
-      return setFromAccessorChain(item, nextAccessors, value);
+    const [part, ...nextAccessors]: AccessPath = accessorChain;
+    const r = root as any;
+    if (isAccessSelector(part)) {
+      if (!Array.isArray(r)) {
+        throw new Error("Unexpected selector in path, value is not array");
+      }
+      return r.reduce((l, t) => {
+        l.push(setFromAccessorChain(t, nextAccessors, value));
+        return l;
+      }, []);
+    }
+    if (isAccessPredicate(part)) {
+      if (!Array.isArray(r)) {
+        throw new Error("Unexpected predicate in path, value is not array");
+      }
+      const [nestedPath, value] = part;
+      const modified: [number, any][] = r.reduce((l, t, i) => {
+        const nestedValue = getFromAccessorChain(t, nestedPath);
+        if (!deepEqual(nestedValue, value)) {
+          return l;
+        }
+        l.push([i, setFromAccessorChain(t, nextAccessors, value)]);
+        return l;
+      }, []);
+      return r.map((t, i) => {
+        const modification = modified.find(([mi]) => i === mi);
+        if (!modification) {
+          return t;
+        }
+        return modification[1];
+      }) as any;
     }
 
-    const newValue = setFromAccessorChain(root[key], nextAccessors, value);
+    const nested = root[part];
+    const newValue = setFromAccessorChain(nested, nextAccessors, value);
 
     // Return root if identity equality
-    return root[key] === newValue
+    return nested === newValue
       ? root
       : Array.isArray(root)
-      ? setInArray(root, key, newValue)
-      : setInObject(root, key, newValue);
+      ? setInArray(root, part, newValue)
+      : setInObject(root, part, newValue);
   }
 }
 
@@ -96,7 +112,7 @@ export class Mutagen<R> {
   private lastRoot?: R;
   constructor(
     private value: () => R,
-    private baseChain: AccessorChain,
+    private baseChain: AccessPath,
     private mutations: Mutations = [],
     private commit: CommitMutations<R> = commitPersistent
   ) {}
@@ -109,48 +125,36 @@ export class Mutagen<R> {
   /**
    * Set subproperty value using accessor chain
    */
-  set<T, A extends AccessorChain>(accessor: A, value: ValueTransformer<A>): this;
+  set<T, A extends AccessPath>(accessor: A, value: ValueTransformer<A>): this;
 
   /**
    * Set subproperty value
    */
   set<T, A extends Accessor<R, T>>(accessor: A, value: ValueTransformer<A>): this {
-    let chain;
-    const access = accessor as Accessor<R, T>;
-    if (isAccessChain(access)) {
-      chain = access;
-    } else if (isAccessFunc(access)) {
-      chain = getAccessorChain(this.value, access);
-    } else {
-      throw new Error("Unexpected accessor type");
-    }
-    this.mutations.push([chain, value]);
+    this.mutations.push([getAccessorPath(accessor), value]);
     return this;
   }
 
-  setSelf<A extends UnitAccessor<R>>(value: ValueTransformer<A>): this {
+  self<A extends UnitAccessor<R>>(value: ValueTransformer<A>): this {
     return this.set(self, value);
   }
 
-  setSelfNow<A extends UnitAccessor<R>>(value: ValueTransformer<A>): this {
+  selfNow<A extends UnitAccessor<R>>(value: ValueTransformer<A>): this {
     this.set(self, value).engage();
     return this;
   }
 
-  mutNow<T, A extends AccessorFunction<R, T>>(accessor: A, value: ValueTransformer<A>): this {
-    this.set(accessor, value).engage();
-    return this;
-  }
-
-  mutPathNow<T, A extends AccessorChain>(accessor: A, value: ValueTransformer<A>): this {
-    this.set(accessor, value).engage();
+  setNow<T, A extends AccessPath>(accessor: A, value: ValueTransformer<A>): this;
+  setNow<T, A extends AccessorFunction<R, T>>(accessor: A, value: ValueTransformer<A>): this;
+  setNow<T, A extends Accessor<R, T>>(accessor: A, value: ValueTransformer<A>): this {
+    this.set(getAccessorPath(accessor), value).engage();
     return this;
   }
 
   mut<T, A extends AccessorFunction<R, T>>(accessor: A): Mutagen<T> {
-    const accessorChain = getAccessorChain(this.value, accessor);
+    const accessorChain = getAccessFuncPath(this.value, accessor);
     const nestedGetter = () => getFromAccessorChain(this.value(), accessorChain);
-    const nestedBaseChain: AccessorChain = this.baseChain.concat(accessorChain);
+    const nestedBaseChain: AccessPath = this.baseChain.concat(accessorChain);
     return new Mutagen<T>(nestedGetter, nestedBaseChain, [], (root, m) => {
       const pathPrependMutations = m.map(
         ([chain, value]) => [nestedBaseChain.concat(chain), value] as Mutation
@@ -213,7 +217,16 @@ export class Mutagen<R> {
 export function setStateMutator<R>([state, setState]: [R, SetStateFunction<R>]): Mutagen<R> {
   return new Mutagen(() => state, [], [], (root, m) => {
     const map = m.map(([chain, value]) => [
-      ...chain.map(part => (isAccessById(part) ? idPredicate(part[0]) : part)),
+      ...chain.map(part => {
+        if (isAccessSelector(part)) {
+          return () => true;
+        }
+        if (isAccessPredicate(part)) {
+          const [path, value] = part;
+          return (item: any) => deepEqual(value, getFromAccessorChain(item, path));
+        }
+        return part;
+      }),
       value,
     ]);
     (setState as any)(...map);
@@ -232,7 +245,7 @@ export function set<R, T, A extends Accessor<R, T>>(
   const access = accessor as Accessor<R, T>;
   return setFromAccessorChain(
     root,
-    isAccessFunc(access) ? getAccessorChain(() => root, access) : (accessor as AccessorChain),
+    isAccessFunc(access) ? getAccessFuncPath(() => root, access) : (accessor as AccessPath),
     value
   );
 }

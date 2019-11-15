@@ -1,14 +1,8 @@
-import { createEffect, createState, SetStateFunction } from "solid-js";
+import { createEffect, createState } from "solid-js";
 import { setStateMutator } from "./utils/set";
-import { Wrapped } from "solid-js/types/state";
 
 const LOCAL_STORAGE_KEY = "todos-solid";
 
-export interface Todo {
-  title: string;
-  id: number;
-  completed?: boolean;
-}
 export interface Store {
   counter: number;
   readonly todos: Todo[];
@@ -17,10 +11,15 @@ export interface Store {
   remainingCount: number;
 }
 
-export type ShowMode = "all" | "active" | "completed";
-
+export interface Todo {
+  title: string;
+  id: number;
+  completed?: boolean;
+}
 export type TodoInit = Omit<Todo, "id">;
 export type TodoEdit = { id: number } & Partial<Todo>;
+
+export type ShowMode = "all" | "active" | "completed";
 
 export interface Actions {
   addTodo: (init: TodoInit) => void;
@@ -44,7 +43,7 @@ export default function createTodosStore(): [Store, Actions] {
   createEffect(() => localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state)));
   createEffect(() => {
     const completedCount = state.todos.filter(todo => todo.completed).length;
-    mut.setSelfNow({ completedCount, remainingCount: state.todos.length - completedCount });
+    mut.selfNow({ completedCount, remainingCount: state.todos.length - completedCount });
   });
 
   return [
@@ -55,14 +54,11 @@ export default function createTodosStore(): [Store, Actions] {
           .set(s => s.counter, c => ++c)
           .set(s => s.todos, t => [...t, { id: state.counter, ...todo }])
           .engage(),
-      removeTodo: todoId =>
-        mut.mutNow(s => s.todos, t => t.filter((item: Todo) => item.id !== todoId)),
-      editTodo: todo => mut.mutPathNow(["todos", [todo.id]], todo),
-      clearCompleted: () =>
-        mut.mutNow(s => s.todos, t => t.filter((todo: Todo) => !todo.completed)),
-      toggleAll: completed =>
-        state.todos.reduce((m, t, i) => m.set(s => s.todos[i].completed, completed), mut).engage(),
-      setVisibility: showMode => mut.mutNow(s => s.showMode, showMode),
+      removeTodo: todoId => mut.setNow(s => s.todos, t => t.filter(item => item.id !== todoId)),
+      editTodo: todo => mut.setNow(s => s.todos.$filter(t => t.id, todo.id), todo),
+      clearCompleted: () => mut.setNow(s => s.todos, t => t.filter(todo => !todo.completed)),
+      toggleAll: completed => mut.setNow(s => s.todos.$all.completed, completed),
+      setVisibility: showMode => mut.setNow(s => s.showMode, showMode),
     },
   ];
 }

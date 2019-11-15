@@ -42,8 +42,8 @@
     "core-js": "3.3.4",
     "idb": "^4.0.5",
     "solid-js": "^0.13.0",
-    "tslib": "^1.10.0",
-    "todomvc-app-css": "^2.3.0"
+    "todomvc-app-css": "^2.3.0",
+    "tslib": "^1.10.0"
   },
   "devDependencies": {
     "@babel/core": "^7.6.2",
@@ -56,9 +56,10 @@
     "@typescript-eslint/parser": "^2.6.0",
     "axe-core": "3.3.2",
     "babel-loader": "8.0.6",
-    "babel-preset-solid": "~0.2.1",
     "babel-plugin-jsx-dom-expressions": "^0.14.0",
+    "babel-preset-solid": "~0.2.1",
     "cross-env": "^6.0.3",
+    "css-loader": "^3.2.0",
     "cypress": "3.6.0",
     "cypress-axe": "0.5.1",
     "eslint": "^6.6.0",
@@ -72,6 +73,7 @@
     "node-sass": "^4.13.0",
     "prettier": "1.18.2",
     "sass-loader": "^8.0.0",
+    "style-loader": "^1.0.0",
     "terser": "^4.3.9",
     "ts-jest": "24.1.0",
     "ts-loader": "6.2.1",
