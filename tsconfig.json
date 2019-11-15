@@ -14,6 +14,7 @@
     "checkJs": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
+    "noErrorTruncation": true
   },
   "include": [
     "src/**/*.ts",

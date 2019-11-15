@@ -25,6 +25,6 @@ module.exports = {
   },
   plugins: [
     new ForkTsCheckerWebpackPlugin({eslint: true, useTypescriptIncrementalApi: true }),
-    new ForkTsCheckerNotifierWebpackPlugin({title: 'VA Admin Cypress', excludeWarnings: false})
+    new ForkTsCheckerNotifierWebpackPlugin({title: 'TodoMVC Cypress', excludeWarnings: false})
   ]
 };

@@ -7,7 +7,7 @@ const LOCAL_STORAGE_KEY = "todos-solid";
 export interface Todo {
   title: string;
   id: number;
-  completed: boolean;
+  completed?: boolean;
 }
 export interface Store {
   counter: number;
@@ -19,14 +19,15 @@ export interface Store {
 
 export type ShowMode = "all" | "active" | "completed";
 
-export type TodoInit = Partial<Omit<Todo, "id">>;
+export type TodoInit = Omit<Todo, "id">;
+export type TodoEdit = { id: number } & Partial<Todo>;
 
 export interface Actions {
   addTodo: (init: TodoInit) => void;
   removeTodo: (id: number) => void;
-  editTodo: (todo: Partial<Todo>) => void;
+  editTodo: (todo: TodoEdit) => void;
   clearCompleted: () => void;
-  toggleAll: (completed?: boolean) => void;
+  toggleAll: (completed: boolean) => void;
   setVisibility: (showMode: ShowMode) => void;
 }
 
@@ -36,7 +37,7 @@ function getLocalStore(): Store {
 }
 
 export default function createTodosStore(): [Store, Actions] {
-  const [state, setState]: [Wrapped<Store>, SetStateFunction<Store>] = createState(getLocalStore());
+  const [state, setState] = createState(getLocalStore());
   const mut = setStateMutator([state, setState]);
 
   // JSON.stringify creates deps on every iterable field
@@ -51,17 +52,16 @@ export default function createTodosStore(): [Store, Actions] {
     {
       addTodo: todo =>
         mut
-          .set(s => s.counter, (c: number) => ++c)
-          .set(s => s.todos, t => [...t, { id: state.counter, ...(todo as Required<TodoInit>) }])
+          .set(s => s.counter, c => ++c)
+          .set(s => s.todos, t => [...t, { id: state.counter, ...todo }])
           .engage(),
-      removeTodo: todoId => mut.mutNow(s => s.todos, t => t.filter(item => item.id !== todoId)),
-      editTodo: todo => mut.mutPathNow(["todos", [todo.id!]], t => ({ ...t, ...todo })),
-      clearCompleted: () => mut.mutNow(s => s.todos, t => t.filter(todo => !todo.completed)),
+      removeTodo: todoId =>
+        mut.mutNow(s => s.todos, t => t.filter((item: Todo) => item.id !== todoId)),
+      editTodo: todo => mut.mutPathNow(["todos", [todo.id]], todo),
+      clearCompleted: () =>
+        mut.mutNow(s => s.todos, t => t.filter((todo: Todo) => !todo.completed)),
       toggleAll: completed =>
-        state.todos
-          .filter(t => t.completed !== completed || false)
-          .reduce((m, t, i) => m.set(s => s.todos[i].completed, completed || false), mut)
-          .engage(),
+        state.todos.reduce((m, t, i) => m.set(s => s.todos[i].completed, completed), mut).engage(),
       setVisibility: showMode => mut.mutNow(s => s.showMode, showMode),
     },
   ];

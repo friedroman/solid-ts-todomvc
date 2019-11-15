@@ -90,7 +90,7 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
       }
     },
     toggle = (todoId: number, completed?: boolean) => {
-      return editTodo({ id: todoId, completed: completed || false });
+      return editTodo({ id: todoId, completed: completed });
     },
     remove = (todoId: number) => removeTodo(todoId);
   return (

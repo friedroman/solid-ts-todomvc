@@ -1,35 +1,40 @@
 export type AccessPredicate<T = any> = AccessorFunction<T, boolean>;
-export type AccessKey = string | number;
-export type AccessBy<T> = AccessKey | AccessPredicate<T>;
+export type AccessIdType = string | number;
+export type AccessBy<T> = AccessIdType | AccessPredicate<T>;
 // single string or number  by convention mean id (as in unique identificator)
 export type AccessId = "id" | "guid" | "uuid";
 export type HasId<T> = {
-  [P in keyof T & AccessId]: AccessKey;
+  [P in keyof T & AccessId]: AccessIdType;
 };
 export type AccessTo = { to: number };
 export type AccessFrom = { from: number };
 export type AccessRangeFull = AccessFrom & AccessTo;
 export type AccessRange = AccessFrom | AccessTo | AccessRangeFull;
-export type AccessPart = string | number | [AccessKey];
+export type AccessPart = string | number | [AccessIdType];
 export type AccessorChain = AccessPart[];
-export type AccessArrayLike<T> = ArrayLike<T> & Access<ArrayLike<T>>;
-export type AccessArray<T> = ReadonlyArray<T> & Access<ReadonlyArray<T>>;
 export type AccessArrayById<T, A = T[]> = T extends HasId<T>
   ? AccessArrayExt<T> & Access<A>
   : Access<A>;
-export interface AccessArrayExt<T extends HasId<T>> extends ReadonlyArray<T> {
-  $byId: AccessIdLookup<T>;
-}
-
-export type AccessIdLookup<T> = {
-  [P in AccessKey]: Access<T>;
+export type AccessArrayExt<T> = {
+  $all: Access<T>;
+  $filter<K>(a: AccessorFunction<T, K>, v: K): Access<T>;
 };
 
 export type AccessArrayProp<A> = A extends Array<infer T> ? AccessArrayById<T, A> : Access<A>;
-export type Access<R> = Readonly<R> &
-  NonNullable<R> &
+
+export type AccessArrayExtensionKeys = keyof AccessArrayExt<any>;
+export type AccessKeys<T> = T extends readonly any[] ? keyof T | AccessArrayExtensionKeys : keyof T;
+export type AccessValue<T, P extends AccessKeys<T>> = P extends AccessArrayExtensionKeys
+  ? T extends ReadonlyArray<infer I> | Array<infer I>
+    ? AccessArrayExt<I>[P]
+    : never
+  : T[Exclude<P, AccessArrayExtensionKeys>] extends Function
+  ? never
+  : Access<T[Exclude<P, AccessArrayExtensionKeys>]>;
+export type Access<T> = Readonly<T> &
+  NonNullable<T> &
   {
-    [P in keyof R]: Access<R[P]>;
+    [P in AccessKeys<T>]: AccessValue<T, P>;
   };
 
 export type AccessorFunction<R = any, T = any> = (root: Access<R>) => Access<T>;
@@ -38,7 +43,7 @@ export type Accessor<R, T = any> = AccessorChain | AccessorFunction<R, T>;
 export type UnwrapAccess<T> = T extends Access<infer R> ? R : T;
 
 export type AccessorTargetType<A extends Accessor<any>> = A extends AccessorFunction<any, infer T>
-  ? T
+  ? UnwrapAccess<T>
   : any;
 
 export type UnitAccessor<T> = AccessorFunction<T, T>;
@@ -53,11 +58,11 @@ export function isAccessFunc<R, T>(accessor: Accessor<R, T>): accessor is Access
   return typeof accessor === "function";
 }
 
-export function isAccessKey(key: any): key is AccessKey {
+export function isAccessKey(key: any): key is AccessIdType {
   return typeof key === "number" || typeof key === "string";
 }
 
-export function isAccessById(part: AccessPart): part is [AccessKey] {
+export function isAccessById(part: AccessPart): part is [AccessIdType] {
   return Array.isArray(part) && part.length === 1 && isAccessKey(part[0]);
 }
 
