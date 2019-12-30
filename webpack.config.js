@@ -6,6 +6,7 @@ const ts = require('ts-loader');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const path = require('path');
 const webpack = require('webpack');
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
 
 module.exports = {
@@ -34,11 +35,24 @@ module.exports = {
             options: {
               cacheDirectory: true,
               presets: [
-                "@babel/env",
+                [
+                  "@babel/preset-env",
+                  {
+                    useBuiltIns: "usage",
+                    corejs: 3,
+                    modules: false
+                  }
+                ],
                 "solid",
               ],
               plugins: [
-                ['@babel/plugin-transform-runtime', {corejs: 3, useJSModules: true}]
+                [
+                  '@babel/plugin-transform-runtime',
+                  {
+                    corejs: 3,
+                    useJSModules: true,
+                  }
+                ]
               ]
             }
           },
@@ -70,6 +84,10 @@ module.exports = {
       inject: true,
       title: "TodoMVC Solid Typescript",
       template: './src/index.html'
-    })
+    }),
+    // new BundleAnalyzerPlugin({
+    //   openAnalyzer: false,
+    //   generateStatsFile: true,
+    // })
   ]
 };

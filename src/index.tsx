@@ -1,5 +1,5 @@
 import { createState, onCleanup } from "solid-js";
-import { For, render, selectWhen, Show } from "solid-js/dom";
+import { For, render, Show } from "solid-js/dom";
 import createTodosStore, { Actions, ShowMode, Store, Todo } from "./store";
 import "babel-plugin-jsx-dom-expressions";
 import "todomvc-app-css/index";
@@ -18,7 +18,7 @@ const TodoApp: TodoApp = () => {
   onCleanup(() => window.removeEventListener("hashchange", locationHandler));
 
   const appSection: any = (
-    <section class="todoapp">
+    <section className="todoapp">
       <TodoHeader addTodo={addTodo} />
       <Show when={store.todos.length > 0}>
         <TodoList {...{ store, toggleAll, editTodo, removeTodo }} />
@@ -38,10 +38,10 @@ const TodoApp: TodoApp = () => {
 };
 
 const TodoHeader = ({ addTodo }: Pick<Actions, "addTodo">) => (
-  <header class="header">
+  <header className="header">
     <h1>todos</h1>
     <input
-      class="new-todo"
+      className="new-todo"
       autofocus
       placeholder="What needs to be done?"
       onKeyUp={({ target, code }: KeyboardEvent) => {
@@ -100,19 +100,17 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
     },
     remove = (todoId: number) => removeTodo(todoId);
   return (
-    <section class="main">
+    <section className="main">
       <input
         id="toggle-all"
-        class="toggle-all"
+        className="toggle-all"
         type="checkbox"
         checked={!store.remainingCount}
         onInput={({ target }: Event) => toggleAll((target as HTMLInputElement).checked)}
       />
-      <label for="toggle-all" />
-      <ul class="todo-list">
-        <For
-          each={filterList(store.todos)}
-          transform={selectWhen(() => state.editingTodoId, "editing")}>
+      <label htmlFor="toggle-all" />
+      <ul className="todo-list">
+        <For each={filterList(store.todos)}>
           {todo => (
             <TodoItem {...{ todo, isEditing, toggle, remove, setCurrent, save, key: todo.id }} />
           )}
@@ -140,10 +138,10 @@ const TodoItem = ({
     },
     onBlur = (e: Event) => saveInputValue(e);
   return (
-    <li class="todo" classList={{ completed: !!todo.completed }}>
-      <div class="view">
+    <li className="todo" classList={{ completed: !!todo.completed, editing: isEditing(todo.id) }}>
+      <div className="view">
         <input
-          class="toggle"
+          className="toggle"
           type="checkbox"
           checked={todo.completed}
           onInput={(e: Event) => {
@@ -152,11 +150,11 @@ const TodoItem = ({
           }}
         />
         <label onDblClick={() => setCurrent(todo.id)}>{todo.title}</label>
-        <button class="destroy" onClick={() => remove(todo.id)} />
+        <button className="destroy" onClick={() => remove(todo.id)} />
       </div>
       <Show when={isEditing(todo.id)}>
         <input
-          class="edit"
+          className="edit"
           value={todo.title}
           onBlur={onBlur}
           onkeyup={onKeyUp}
@@ -168,12 +166,12 @@ const TodoItem = ({
 };
 
 const TodoFooter = ({ store, clearCompleted }: StoreHolder & Pick<Actions, "clearCompleted">) => (
-  <footer class="footer">
-    <span class="todo-count">
+  <footer className="footer">
+    <span className="todo-count">
       <strong>{store.remainingCount}</strong>
-      {store.remainingCount === 1 ? " item" : " items"} left
+      {store.remainingCount === 1 ? " item left" : " items left"}
     </span>
-    <ul class="filters">
+    <ul className="filters">
       <li>
         <a href="#/" classList={{ selected: store.showMode === "all" }}>
           All
@@ -191,7 +189,7 @@ const TodoFooter = ({ store, clearCompleted }: StoreHolder & Pick<Actions, "clea
       </li>
     </ul>
     <Show when={store.completedCount > 0}>
-      <button class="clear-completed" onClick={clearCompleted}>
+      <button className="clear-completed" onClick={clearCompleted}>
         Clear completed
       </button>
     </Show>

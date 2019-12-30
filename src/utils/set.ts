@@ -1,4 +1,4 @@
-import { SetStateFunction } from "solid-js";
+import { SetStateFunction, freeze } from "solid-js";
 import { deepEqual, setInArray, setInObject } from "./utils";
 import {
   Accessor,
@@ -215,23 +215,36 @@ export class Mutagen<R> {
  * Fluently mutate solid reactive tree
  */
 export function setStateMutator<R>([state, setState]: [R, SetStateFunction<R>]): Mutagen<R> {
-  return new Mutagen(() => state, [], [], (root, m) => {
-    const map = m.map(([chain, value]) => [
-      ...chain.map(part => {
-        if (isAccessSelector(part)) {
-          return () => true;
+  return new Mutagen(
+    () => state,
+    [],
+    [],
+    (root, m) => {
+      const set = setState as any;
+      const map = m.map(([chain, value]) => {
+        if (chain.length === 0) {
+          return [ value ];
         }
-        if (isAccessPredicate(part)) {
-          const [path, value] = part;
-          return (item: any) => deepEqual(value, getFromAccessorChain(item, path));
-        }
-        return part;
-      }),
-      value,
-    ]);
-    (setState as any)(...map);
-    return state;
-  });
+        return [
+          ...chain.map(part => {
+            if (isAccessSelector(part)) {
+              return () => true;
+            }
+            if (isAccessPredicate(part)) {
+              const [path, value] = part;
+              return (item: any) => deepEqual(value, getFromAccessorChain(item, path));
+            }
+            return part;
+          }),
+          value,
+        ];
+      });
+      freeze(() => {
+        map.forEach(i => set(...i));
+      });
+      return state;
+    }
+  );
 }
 
 /**

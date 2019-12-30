@@ -17,7 +17,7 @@ export interface Todo {
   completed?: boolean;
 }
 export type TodoInit = Omit<Todo, "id">;
-export type TodoEdit = { id: number } & Partial<Todo>;
+export type TodoEdit = Pick<Todo, "id"> & Partial<Todo>;
 
 export type ShowMode = "all" | "active" | "completed";
 

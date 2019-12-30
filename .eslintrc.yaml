@@ -28,10 +28,11 @@ rules   :
   "@typescript-eslint/explicit-function-return-type": off
   "@typescript-eslint/no-unused-vars"               : warn
   "@typescript-eslint/no-explicit-any"              : off
+  "@typescript-eslint/no-empty-function"            : off
   quotes                     : [warn, double]
   "@typescript-eslint/quotes": [warn, double]
   prettier/prettier:
-    - error
+    - warn
     - printWidth        : 100
       trailingComma     : "es5"
       jsxBracketSameLine: true
