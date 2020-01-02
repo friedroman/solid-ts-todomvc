@@ -69,7 +69,7 @@ interface StoreHolder {
 }
 
 interface ListState {
-  editingTodoId: number;
+  editingTodoId?: number;
 }
 
 type ListProps = StoreHolder & Pick<Actions, "editTodo" | "removeTodo" | "toggleAll">;
