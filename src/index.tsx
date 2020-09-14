@@ -1,8 +1,9 @@
-import { createState, onCleanup } from "solid-js";
+import { createState, ErrorBoundary, onCleanup } from "solid-js";
 import { For, render, Show } from "solid-js/dom";
 import createTodosStore, { Actions, ShowMode, Store, Todo } from "./store";
 import "babel-plugin-jsx-dom-expressions";
-import "todomvc-app-css/index";
+import "./index.sass";
+import { RangeRequest, VirtualList } from "./virtual";
 
 const setFocus = (el: HTMLElement) => Promise.resolve().then(() => el.focus());
 
@@ -17,7 +18,7 @@ const TodoApp: TodoApp = () => {
   window.addEventListener("hashchange", locationHandler);
   onCleanup(() => window.removeEventListener("hashchange", locationHandler));
 
-  const appSection: any = (
+  const appSection = (
     <section className="todoapp">
       <TodoHeader addTodo={addTodo} />
       <Show when={store.todos.length > 0}>
@@ -25,8 +26,8 @@ const TodoApp: TodoApp = () => {
         <TodoFooter store={store} clearCompleted={clearCompleted} />
       </Show>
     </section>
-  );
-  const obs = new MutationObserver(mutations => console.log("DOM Mutations", mutations));
+  ) as HTMLElement;
+  const obs = new MutationObserver((mutations) => console.log("DOM Mutations", mutations));
   obs.observe(appSection, {
     attributeOldValue: true,
     characterDataOldValue: true,
@@ -39,9 +40,10 @@ const TodoApp: TodoApp = () => {
 
 const TodoHeader = ({ addTodo }: Pick<Actions, "addTodo">) => (
   <header className="header">
-    <h1>todos</h1>
+    <h1 className="title is-1 has-text-centered">Todos</h1>
     <input
-      className="new-todo"
+      className="new-todo input"
+      type="text"
       autofocus
       placeholder="What needs to be done?"
       onKeyUp={({ target, code }: KeyboardEvent) => {
@@ -76,8 +78,8 @@ type ListProps = StoreHolder & Pick<Actions, "editTodo" | "removeTodo" | "toggle
 const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
   const [state, setState] = createState({} as ListState),
     filterList = (todos: Todo[]) => {
-      if (store.showMode === "active") return todos.filter(todo => !todo.completed);
-      else if (store.showMode === "completed") return todos.filter(todo => todo.completed);
+      if (store.showMode === "active") return todos.filter((todo) => !todo.completed);
+      else if (store.showMode === "completed") return todos.filter((todo) => todo.completed);
       else return todos;
     },
     isEditing = (todoId: number) => {
@@ -99,23 +101,39 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
       return editTodo({ id: todoId, completed: completed });
     },
     remove = (todoId: number) => removeTodo(todoId);
+  const sliceTodos = (request: RangeRequest) => {
+    const todos = filterList(store.todos);
+    const slice = todos.slice(request.from, request.from + request.length);
+    return Promise.resolve(slice);
+  };
   return (
-    <section className="main">
-      <input
-        id="toggle-all"
-        className="toggle-all"
-        type="checkbox"
-        checked={!store.remainingCount}
-        onInput={({ target }: Event) => toggleAll((target as HTMLInputElement).checked)}
-      />
-      <label htmlFor="toggle-all" />
-      <ul className="todo-list">
-        <For each={filterList(store.todos)}>
-          {todo => (
-            <TodoItem {...{ todo, isEditing, toggle, remove, setCurrent, save, key: todo.id }} />
-          )}
-        </For>
-      </ul>
+    <section className="main section">
+      <div className="field">
+        <input
+          id="toggle-all"
+          className="toggle-all checkbox"
+          type="checkbox"
+          checked={!store.remainingCount}
+          onInput={({ target }: Event) => toggleAll((target as HTMLInputElement).checked)}
+        />
+        <label className="label" htmlFor="toggle-all" />
+      </div>
+      <div className="lists-container">
+        <ul className="todo-list list">
+          <For each={filterList(store.todos)}>
+            {(todo) => (
+              <TodoItem {...{ todo, isEditing, toggle, remove, setCurrent, save, key: todo.id }} />
+            )}
+          </For>
+        </ul>
+          <ul className="todo-list list">
+            <VirtualList data={sliceTodos} total={() => Promise.resolve(store.todos.length)}>
+              {(todo) => (
+                <TodoItem {...{ todo, isEditing, toggle, remove, setCurrent, save, key: todo.id }} />
+              )}
+            </VirtualList>
+          </ul>
+      </div>
     </section>
   );
 };
@@ -138,27 +156,29 @@ const TodoItem = ({
     },
     onBlur = (e: Event) => saveInputValue(e);
   return (
-    <li className="todo" classList={{ completed: !!todo.completed, editing: isEditing(todo.id) }}>
-      <div className="view">
+    <li
+      className="todo list-item"
+      classList={{ completed: !!todo.completed, editing: isEditing(todo.id) }}>
+      <div className="view control">
         <input
-          className="toggle"
+          className="toggle checkbox"
           type="checkbox"
           checked={todo.completed}
-          onInput={(e: Event) => {
-            const target = e.target as HTMLInputElement;
-            toggle(todo.id, target.checked);
-          }}
+          onInput={({ target }) => toggle(todo.id, target.checked)}
         />
         <label onDblClick={() => setCurrent(todo.id)}>{todo.title}</label>
-        <button className="destroy" onClick={() => remove(todo.id)} />
+        <button
+          className="destroy delete is-small is-pulled-right"
+          onClick={() => remove(todo.id)}
+        />
       </div>
       <Show when={isEditing(todo.id)}>
         <input
           className="edit"
           value={todo.title}
           onBlur={onBlur}
-          onkeyup={onKeyUp}
-          forwardRef={setFocus}
+          onKeyUp={onKeyUp}
+          ref={setFocus}
         />
       </Show>
     </li>
@@ -166,12 +186,12 @@ const TodoItem = ({
 };
 
 const TodoFooter = ({ store, clearCompleted }: StoreHolder & Pick<Actions, "clearCompleted">) => (
-  <footer className="footer">
-    <span className="todo-count">
+  <footer className="footer level">
+    <span className="todo-count level-item">
       <strong>{store.remainingCount}</strong>
       {store.remainingCount === 1 ? " item left" : " items left"}
     </span>
-    <ul className="filters">
+    <ul className="filters level-item">
       <li>
         <a href="#/" classList={{ selected: store.showMode === "all" }}>
           All
@@ -189,7 +209,7 @@ const TodoFooter = ({ store, clearCompleted }: StoreHolder & Pick<Actions, "clea
       </li>
     </ul>
     <Show when={store.completedCount > 0}>
-      <button className="clear-completed" onClick={clearCompleted}>
+      <button className="clear-completed button level-item" onClick={clearCompleted}>
         Clear completed
       </button>
     </Show>

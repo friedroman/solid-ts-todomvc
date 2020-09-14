@@ -19,6 +19,6 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "src/**/*.ts.d"
+    "src/types/**/*.ts.d"
   ]
 }

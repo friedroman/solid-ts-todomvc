@@ -1,12 +1,12 @@
-export const setInObject = <O extends {}, K extends keyof O, V extends O[K]>(
+export const setInObject = <O extends any, K extends keyof O, V extends O[K]>(
   object: O,
   key: K,
   value: V
-) =>
+): O =>
   Object.assign(Object.create(Object.getPrototypeOf(object)), object, {
     [key]: value,
   });
-export const setInArray = <V>(array: V[], index: string | number, value: V) => [
+export const setInArray = <V>(array: V[], index: number, value: V) => [
   ...array.slice(0, Number(index)),
   value,
   ...array.slice(Number(index) + 1),

@@ -51,12 +51,26 @@ export default function createTodosStore(): [Store, Actions] {
     {
       addTodo: todo =>
         mut
-          .set(s => s.counter, c => ++c)
-          .set(s => s.todos, t => [...t, { id: state.counter, ...todo }])
+          .set(
+            s => s.counter,
+            c => ++c
+          )
+          .set(
+            s => s.todos,
+            t => [...t, { id: state.counter, ...todo }]
+          )
           .engage(),
-      removeTodo: todoId => mut.setNow(s => s.todos, t => t.filter(item => item.id !== todoId)),
+      removeTodo: todoId =>
+        mut.setNow(
+          s => s.todos,
+          t => t.filter(item => item.id !== todoId)
+        ),
       editTodo: todo => mut.setNow(s => s.todos.$filter(t => t.id, todo.id), todo),
-      clearCompleted: () => mut.setNow(s => s.todos, t => t.filter(todo => !todo.completed)),
+      clearCompleted: () =>
+        mut.setNow(
+          s => s.todos,
+          t => t.filter(todo => !todo.completed)
+        ),
       toggleAll: completed => mut.setNow(s => s.todos.$all.completed, completed),
       setVisibility: showMode => mut.setNow(s => s.showMode, showMode),
     },

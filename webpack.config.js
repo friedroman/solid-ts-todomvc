@@ -78,7 +78,7 @@ module.exports = {
     stats: 'errors-only'
   },
   plugins: [
-    new ForkTsCheckerWebpackPlugin({eslint: true, useTypescriptIncrementalApi: true }),
+    new ForkTsCheckerWebpackPlugin({eslint: {files: './src/**/*.{ts,tsx,js,jsx}', enabled: true}}),
     new ForkTsCheckerNotifierWebpackPlugin({title: 'TodoMVC Solid', excludeWarnings: false}),
     new HtmlWebpackPlugin({
       inject: true,

@@ -5,31 +5,39 @@ import {
   AccessorFunction,
   AccessorTargetType,
   AccessPath,
-  getAccessFuncPath,
   getAccessorPath,
   getFromAccessorChain,
   isAccessFunc,
+  getAccessFuncPath,
   isAccessPredicate,
   isAccessSelector,
   self,
   UnitAccessor,
 } from "./access";
 
+type ValueTransformFunc<A extends Accessor<any>> = (
+  value: AccessorTargetType<A>
+) => AccessorTargetType<A>;
 export type ValueTransformer<A extends Accessor<any>> =
   | Partial<AccessorTargetType<A>>
   | AccessorTargetType<A>
-  | ((value: AccessorTargetType<A>) => AccessorTargetType<A>);
+  | ValueTransformFunc<A>;
 
 export type Mutation = [AccessPath, ValueTransformer<any>];
 export type Mutations = Mutation[];
 export type CommitMutations<R> = (root: R, m: Mutations) => R;
+export function isTransformFunc<A extends Accessor<any>>(
+  transformer: ValueTransformer<A>
+): transformer is ValueTransformFunc<A> {
+  return typeof transformer === "function";
+}
 
 export function setFromAccessorChain<
   R extends any,
   A extends AccessPath,
   V extends ValueTransformer<A>
 >(root: R, accessorChain: A, value: V): R {
-  const applyValue = (r: R) => (typeof value === "function" ? value(r) : value);
+  const applyValue = (r: R): R => (isTransformFunc(value) ? value(r) : value) as R;
   if (accessorChain.length === 0) {
     // root is the target
     const newNode = applyValue(root);
@@ -39,7 +47,7 @@ export function setFromAccessorChain<
   } else {
     // root is a parent of the target
     const [part, ...nextAccessors]: AccessPath = accessorChain;
-    const r = root as any;
+    const r = root;
     if (isAccessSelector(part)) {
       if (!Array.isArray(r)) {
         throw new Error("Unexpected selector in path, value is not array");
@@ -71,15 +79,16 @@ export function setFromAccessorChain<
       }) as any;
     }
 
-    const nested = root[part];
+    const key = part as keyof R;
+    const nested = root[key];
     const newValue = setFromAccessorChain(nested, nextAccessors, value);
 
     // Return root if identity equality
     return nested === newValue
       ? root
-      : Array.isArray(root)
-      ? setInArray(root, part, newValue)
-      : setInObject(root, part, newValue);
+      : ((Array.isArray(root)
+          ? setInArray(root, part as number, newValue)
+          : setInObject(root, key, newValue)) as R);
   }
 }
 
@@ -222,10 +231,10 @@ export function setStateMutator<R>([state, setState]: [R, any]): Mutagen<R> {
     (root, m) => {
       const map = m.map(([chain, value]) => {
         if (chain.length === 0) {
-          return [ value ];
+          return [value];
         }
         return [
-          ...chain.map(part => {
+          ...chain.map((part) => {
             if (isAccessSelector(part)) {
               return () => true;
             }
@@ -239,7 +248,7 @@ export function setStateMutator<R>([state, setState]: [R, any]): Mutagen<R> {
         ];
       });
       freeze(() => {
-        map.forEach(i => setState(...i));
+        map.forEach((i) => setState(...i));
       });
       return state;
     }

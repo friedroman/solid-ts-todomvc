@@ -5,7 +5,7 @@ export type AccessIdType = string | number;
 export type AccessSelector = "$all";
 export type AccessPredicate = [AccessPath, AccessValue];
 export type AccessBy = [AccessSelector] | AccessPredicate;
-// single string or number  by convention mean id (as in unique identificator)
+// single string or number by convention mean id (as in unique identifier)
 export type AccessId = "id" | "guid" | "uuid";
 export type HasId<T> = {
   [P in keyof T & AccessId]: AccessIdType;
@@ -55,15 +55,13 @@ export type Accessor<R, T = any> = AccessPath | AccessorFunction<R, T>;
 
 export type UnwrapAccess<T> = T extends Access<infer R> ? R : T;
 
-export type AccessorTargetType<A extends Accessor<any>> = A extends (
-  r: Access<any>
-) => Access<infer T>
+export type AccessorTargetType<A extends Accessor<any>> = A extends AccessorFunction<any, infer T>
   ? T
   : any;
 
 export type UnitAccessor<T> = AccessorFunction<T, T>;
 
-export const self: UnitAccessor<any> = _ => _;
+export const self: UnitAccessor<any> = (_) => _;
 
 export function isAccessPath<R, T>(accessor: Accessor<R, T>): accessor is AccessPath {
   return Array.isArray(accessor);
@@ -206,6 +204,6 @@ export function getFromAccessorChain<R extends any, A extends AccessPath>(
         () => new Error("Unexpected predicate in path")
       );
     }
-    return getFromAccessorChain(root[part], nextAccessors);
+    return getFromAccessorChain(root[part as keyof R], nextAccessors);
   }
 }
