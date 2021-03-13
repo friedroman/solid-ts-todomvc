@@ -1,4 +1,4 @@
-import { freeze } from "solid-js";
+import {freeze, State, unwrap} from "solid-js";
 import { deepEqual, setInArray, setInObject } from "./utils";
 import {
   Accessor,
@@ -223,9 +223,9 @@ export class Mutagen<R> {
 /**
  * Fluently mutate solid reactive tree
  */
-export function setStateMutator<R>([state, setState]: [R, any]): Mutagen<R> {
+export function setStateMutator<R>([state, setState]: [State<R>, any]): Mutagen<R> {
   return new Mutagen(
-    () => state,
+    () => state as R,
     [],
     [],
     (root, m) => {
@@ -250,7 +250,7 @@ export function setStateMutator<R>([state, setState]: [R, any]): Mutagen<R> {
       freeze(() => {
         map.forEach((i) => setState(...i));
       });
-      return state;
+      return state as R;
     }
   );
 }

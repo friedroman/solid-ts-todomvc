@@ -1,9 +1,10 @@
-import { createState, ErrorBoundary, onCleanup } from "solid-js";
-import { For, render, Show } from "solid-js/dom";
-import createTodosStore, { Actions, ShowMode, Store, Todo } from "./store";
+import {createMemo, createState, onCleanup} from "solid-js";
+import {For, render, Show} from "solid-js/dom";
+import createTodosStore, {Actions, ListMode, ShowMode, Store, Todo} from "./store";
 import "babel-plugin-jsx-dom-expressions";
 import "./index.sass";
-import { RangeRequest, VirtualList } from "./virtual";
+import {VirtualList} from "./virtual";
+import {RangeRequest} from "./virtual_types";
 
 const setFocus = (el: HTMLElement) => Promise.resolve().then(() => el.focus());
 
@@ -12,7 +13,7 @@ type TodoApp = () => any;
 const TodoApp: TodoApp = () => {
   const [
     store,
-    { addTodo, toggleAll, editTodo, removeTodo, clearCompleted, setVisibility },
+    { addTodo, toggleAll, editTodo, removeTodo, clearCompleted, setVisibility, setListMode },
   ] = createTodosStore();
   const locationHandler = () => setVisibility((location.hash.slice(2) as ShowMode) || "all");
   window.addEventListener("hashchange", locationHandler);
@@ -20,7 +21,7 @@ const TodoApp: TodoApp = () => {
 
   const appSection = (
     <section className="todoapp">
-      <TodoHeader addTodo={addTodo} />
+      <TodoHeader listMode={store.listMode} setListMode={setListMode} addTodo={addTodo} />
       <Show when={store.todos.length > 0}>
         <TodoList {...{ store, toggleAll, editTodo, removeTodo }} />
         <TodoFooter store={store} clearCompleted={clearCompleted} />
@@ -38,25 +39,58 @@ const TodoApp: TodoApp = () => {
   return appSection;
 };
 
-const TodoHeader = ({ addTodo }: Pick<Actions, "addTodo">) => (
-  <header className="header">
-    <h1 className="title is-1 has-text-centered">Todos</h1>
-    <input
-      className="new-todo input"
-      type="text"
-      autofocus
-      placeholder="What needs to be done?"
-      onKeyUp={({ target, code }: KeyboardEvent) => {
-        const t = target as HTMLInputElement;
-        const title = t.value.trim();
-        if (code === "Enter" && title) {
-          addTodo({ title });
-          t.value = "";
-        }
-      }}
-    />
-  </header>
-);
+const TodoHeader = (props: { listMode: ListMode } & Pick<Actions, "addTodo" | "setListMode">) => {
+  const onChange = (value: ListMode) => (e: { target: HTMLInputElement }) =>
+    e.target.checked ? props.setListMode(value) : undefined;
+  return (
+    <header className="header">
+      <h1 className="title is-1 has-text-centered">Todos</h1>
+      <input
+        className="new-todo input"
+        type="text"
+        autofocus
+        placeholder="What needs to be done?"
+        onKeyUp={({ target, code }: KeyboardEvent) => {
+          const t = target as HTMLInputElement;
+          const title = t.value.trim();
+          if (code === "Enter" && title) {
+            props.addTodo({ title });
+            t.value = "";
+          }
+        }}
+      />
+      <div class="control list-mode-switcher">
+        <label class="radio">
+          <input
+            type="radio"
+            name="listmode"
+            checked={props.listMode == null || props.listMode === "plain"}
+            onChange={onChange("plain")}
+          />
+          Real
+        </label>
+        <label class="radio">
+          <input
+            type="radio"
+            name="listmode"
+            checked={props.listMode === "virtual"}
+            onChange={onChange("virtual")}
+          />
+          Virtual
+        </label>
+        <label class="radio">
+          <input
+            type="radio"
+            name="listmode"
+            checked={props.listMode === "both"}
+            onChange={onChange("both")}
+          />
+          Both
+        </label>
+      </div>
+    </header>
+  );
+};
 
 interface ListActions {
   isEditing: (id: number) => boolean;
@@ -77,11 +111,11 @@ interface ListState {
 type ListProps = StoreHolder & Pick<Actions, "editTodo" | "removeTodo" | "toggleAll">;
 const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
   const [state, setState] = createState({} as ListState),
-    filterList = (todos: Todo[]) => {
-      if (store.showMode === "active") return todos.filter((todo) => !todo.completed);
-      else if (store.showMode === "completed") return todos.filter((todo) => todo.completed);
-      else return todos;
-    },
+    filterList = createMemo((todos: Todo[]) => {
+      if (store.showMode === "active") return store.todos.filter((todo) => !todo.completed);
+      else if (store.showMode === "completed") return store.todos.filter((todo) => todo.completed);
+      else return store.todos;
+    }, []),
     isEditing = (todoId: number) => {
       return state.editingTodoId === todoId;
     },
@@ -102,9 +136,7 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
     },
     remove = (todoId: number) => removeTodo(todoId);
   const sliceTodos = (request: RangeRequest) => {
-    const todos = filterList(store.todos);
-    const slice = todos.slice(request.from, request.from + request.length);
-    return Promise.resolve(slice);
+    return filterList().slice(request.from, request.from + request.length);
   };
   return (
     <section className="main section">
@@ -114,25 +146,33 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
           className="toggle-all checkbox"
           type="checkbox"
           checked={!store.remainingCount}
-          onInput={({ target }: Event) => toggleAll((target as HTMLInputElement).checked)}
+          onInput={({ target }) => toggleAll(target.checked)}
         />
         <label className="label" htmlFor="toggle-all" />
       </div>
       <div className="lists-container">
-        <ul className="todo-list list">
-          <For each={filterList(store.todos)}>
-            {(todo) => (
-              <TodoItem {...{ todo, isEditing, toggle, remove, setCurrent, save, key: todo.id }} />
-            )}
-          </For>
-        </ul>
+        <Show when={store.listMode !== "virtual"}>
           <ul className="todo-list list">
-            <VirtualList data={sliceTodos} total={() => Promise.resolve(store.todos.length)}>
-              {(todo) => (
-                <TodoItem {...{ todo, isEditing, toggle, remove, setCurrent, save, key: todo.id }} />
+            <For each={filterList()}>
+              {(todo, index) => (
+                <TodoItem
+                  {...{ todo: () => todo, index, isEditing, toggle, remove, setCurrent, save, key: todo.id }}
+                />
+              )}
+            </For>
+          </ul>
+        </Show>
+        <Show when={store.listMode != null && store.listMode !== "plain"}>
+          <ul className="todo-list list">
+            <VirtualList data={sliceTodos} total={() => Promise.resolve(filterList().length)}>
+              {(todo, index) => (
+                <TodoItem
+                  {...{ todo, index, isEditing, toggle, remove, setCurrent, save, key: todo().id }}
+                />
               )}
             </VirtualList>
           </ul>
+        </Show>
       </div>
     </section>
   );
@@ -140,44 +180,42 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
 
 const TodoItem = ({
   todo,
+  index,
   isEditing,
   toggle,
   remove,
   setCurrent,
   save,
-}: { todo: Todo } & ListActions) => {
-  const saveInputValue = (e: Event) => {
-      const input = e.target as HTMLInputElement;
-      save(todo.id, input.value.trim());
-    },
-    onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Enter") saveInputValue(e);
-      else if (e.code === "Escape") setCurrent();
-    },
-    onBlur = (e: Event) => saveInputValue(e);
+}: { todo: () => Todo; index: () => number } & ListActions) => {
+  const saveInputValue = ({ target }: { target: HTMLInputElement }) =>
+    save(todo().id, target.value.trim());
   return (
     <li
-      className="todo list-item"
-      classList={{ completed: !!todo.completed, editing: isEditing(todo.id) }}>
+      className="todo list-item box"
+      classList={{ completed: !!todo().completed, editing: isEditing(todo().id) }}>
       <div className="view control">
         <input
           className="toggle checkbox"
           type="checkbox"
-          checked={todo.completed}
-          onInput={({ target }) => toggle(todo.id, target.checked)}
+          checked={todo().completed}
+          onInput={({ target }) => toggle(todo().id, target.checked)}
         />
-        <label onDblClick={() => setCurrent(todo.id)}>{todo.title}</label>
+        {index ? index() : undefined}
+        <label onDblClick={() => setCurrent(todo().id)}>{todo().title}</label>
         <button
           className="destroy delete is-small is-pulled-right"
-          onClick={() => remove(todo.id)}
+          onClick={() => remove(todo().id)}
         />
       </div>
-      <Show when={isEditing(todo.id)}>
+      <Show when={isEditing(todo().id)}>
         <input
           className="edit"
-          value={todo.title}
-          onBlur={onBlur}
-          onKeyUp={onKeyUp}
+          value={todo().title}
+          onBlur={(e) => saveInputValue(e)}
+          onKeyUp={(e) => {
+            if (e.code === "Enter") saveInputValue(e);
+            else if (e.code === "Escape") setCurrent();
+          }}
           ref={setFocus}
         />
       </Show>
