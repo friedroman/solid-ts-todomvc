@@ -1,13 +1,17 @@
+import { JSX } from "solid-js";
+
 export interface RangeRequest {
   from: number;
   length: number;
 }
 
 export interface Measurements {
+  compensationDelta: number;
   scrollOffset: number;
   scrolled: number;
   lowWatermark: number;
   highWatermark: number;
+  spaceBefore: number;
   scrollTop: number;
   scrollViewport: number;
   scrollHeight: number;
@@ -33,8 +37,10 @@ type Chunk<T> = {
   measured: boolean;
 };
 export type VirtualState<T> = {
-  readonly spaceAbove: number;
-  readonly nextChunkStartIndex: number;
+  spaceBefore: number;
+  spaceAfter: number;
+  nextChunkStartIndex: number;
+  total: number; 
   chunks: Chunk<T>[];
   averageHeight: number;
   measuredItemsCount: number;

@@ -1,10 +1,10 @@
-import {createMemo, createState, onCleanup} from "solid-js";
-import {For, render, Show} from "solid-js/dom";
-import createTodosStore, {Actions, ListMode, ShowMode, Store, Todo} from "./store";
+import { createMemo, createState, onCleanup } from "solid-js";
+import { render, Show, For } from "solid-js/web";
+import createTodosStore, { Actions, ListMode, ShowMode, Store, Todo } from "./store";
 import "babel-plugin-jsx-dom-expressions";
 import "./index.sass";
-import {VirtualList} from "./virtual";
-import {RangeRequest} from "./virtual_types";
+import { VirtualList } from "./virtual";
+import { RangeRequest } from "./virtual_types";
 
 const setFocus = (el: HTMLElement) => Promise.resolve().then(() => el.focus());
 
@@ -40,9 +40,9 @@ const TodoApp: TodoApp = () => {
 };
 
 const TodoHeader = (props: { listMode: ListMode } & Pick<Actions, "addTodo" | "setListMode">) => {
-  const onChange = (value: ListMode) => (e: { target: HTMLInputElement }) =>
-    e.target.checked ? props.setListMode(value) : undefined;
-  return (
+  const onChange = (value: ListMode) => (e: { currentTarget: HTMLInputElement }) =>
+    e.currentTarget.checked ? props.setListMode(value) : undefined;
+  const header = (
     <header className="header">
       <h1 className="title is-1 has-text-centered">Todos</h1>
       <input
@@ -90,6 +90,7 @@ const TodoHeader = (props: { listMode: ListMode } & Pick<Actions, "addTodo" | "s
       </div>
     </header>
   );
+  return header;
 };
 
 interface ListActions {
@@ -146,7 +147,7 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
           className="toggle-all checkbox"
           type="checkbox"
           checked={!store.remainingCount}
-          onInput={({ target }) => toggleAll(target.checked)}
+          onInput={({ currentTarget }) => toggleAll(currentTarget.checked)}
         />
         <label className="label" htmlFor="toggle-all" />
       </div>
@@ -156,7 +157,16 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
             <For each={filterList()}>
               {(todo, index) => (
                 <TodoItem
-                  {...{ todo: () => todo, index, isEditing, toggle, remove, setCurrent, save, key: todo.id }}
+                  {...{
+                    todo: () => todo,
+                    index,
+                    isEditing,
+                    toggle,
+                    remove,
+                    setCurrent,
+                    save,
+                    key: todo.id,
+                  }}
                 />
               )}
             </For>
@@ -178,27 +188,20 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
   );
 };
 
-const TodoItem = ({
-  todo,
-  index,
-  isEditing,
-  toggle,
-  remove,
-  setCurrent,
-  save,
-}: { todo: () => Todo; index: () => number } & ListActions) => {
-  const saveInputValue = ({ target }: { target: HTMLInputElement }) =>
-    save(todo().id, target.value.trim());
+type ItemProps = { todo: () => Todo; index: () => number } & ListActions;
+const TodoItem = ({ todo, index, isEditing, toggle, remove, setCurrent, save }: ItemProps) => {
+  const saveInputValue = ({ currentTarget }: { currentTarget: HTMLInputElement }) =>
+    save(todo().id, currentTarget.value.trim());
   return (
     <li
       className="todo list-item box"
-      classList={{ completed: !!todo().completed, editing: isEditing(todo().id) }}>
+      classList={{ completed: todo().completed, editing: isEditing(todo().id) }}>
       <div className="view control">
         <input
           className="toggle checkbox"
           type="checkbox"
           checked={todo().completed}
-          onInput={({ target }) => toggle(todo().id, target.checked)}
+          onInput={({ currentTarget: i }) => toggle(todo().id, i.checked)}
         />
         {index ? index() : undefined}
         <label onDblClick={() => setCurrent(todo().id)}>{todo().title}</label>

@@ -35,24 +35,24 @@ module.exports = {
             options: {
               cacheDirectory: true,
               presets: [
-                [
-                  "@babel/preset-env",
-                  {
-                    useBuiltIns: "usage",
-                    corejs: 3,
-                    modules: false
-                  }
-                ],
+                // [
+                //   "@babel/preset-env",
+                //   {
+                //     useBuiltIns: "usage",
+                //     corejs: 3,
+                //     modules: false
+                //   }
+                // ],
                 "solid",
               ],
               plugins: [
-                [
-                  '@babel/plugin-transform-runtime',
-                  {
-                    corejs: 3,
-                    useJSModules: true,
-                  }
-                ]
+                // [
+                //   '@babel/plugin-transform-runtime',
+                //   {
+                //     corejs: 3,
+                //     useJSModules: true,
+                //   }
+                // ]
               ]
             }
           },
@@ -72,10 +72,9 @@ module.exports = {
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.css', '.scss']
   },
   devServer: {
-    clientLogLevel: 'warning',
     open: true,
     historyApiFallback: true,
-    stats: 'errors-only'
+    port: 80
   },
   plugins: [
     new ForkTsCheckerWebpackPlugin({eslint: {files: './src/**/*.{ts,tsx,js,jsx}', enabled: true}}),

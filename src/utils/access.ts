@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
 import { deepEqual, lazy } from "./utils";
 
 export type AccessValue = string | number;
@@ -39,35 +40,33 @@ export type AccessArrayValue<T, P extends AccessArrayKeys> = T extends AccessArr
   ? AccessArrayExt<Item>[P]
   : never;
 export type AccessValueExt<T, P extends AccessKeys<T>> = never;
-export type AccessPropValue<T, P extends keyof T> = T[P] extends Function ? never : Access<T[P]>;
+export type AccessPropValue<T, P extends keyof T> = T[P] extends Function ? T[P] : Access<T[P]>;
 
-export type Access<T> = NonNullable<T> &
-  {
+export type Access<T> = /* NonNullable<T> &
+ */  {
     readonly [P in AccessKeys<T>]-?: P extends keyof T
       ? AccessPropValue<T, P>
       : P extends AccessArrayKeys
       ? AccessArrayValue<T, P>
-      : AccessValueExt<T, P>;
+      : never;
   };
 
 export type AccessorFunction<R = any, T = any> = (root: Access<R>) => Access<T>;
-export type Accessor<R, T = any> = AccessPath | AccessorFunction<R, T>;
-
+export type Accessor = AccessPath | AccessorFunction<any>;
 export type UnwrapAccess<T> = T extends Access<infer R> ? R : T;
 
-export type AccessorTargetType<A extends Accessor<any>> = A extends AccessorFunction<any, infer T>
+export type AccessorTargetType<A extends Accessor> = A extends AccessorFunction<any, infer T>
   ? T
   : any;
 
 export type UnitAccessor<T> = AccessorFunction<T, T>;
 
-export const self: UnitAccessor<any> = (_) => _;
 
-export function isAccessPath<R, T>(accessor: Accessor<R, T>): accessor is AccessPath {
+export function isAccessPath<R, T>(accessor: Accessor): accessor is AccessPath {
   return Array.isArray(accessor);
 }
 
-export function isAccessFunc<R, T>(accessor: Accessor<R, T>): accessor is AccessorFunction<R, T> {
+export function isAccessFunc<R, T>(accessor: Accessor): accessor is AccessorFunction {
   return typeof accessor === "function";
 }
 
@@ -91,7 +90,7 @@ export function getAccessFuncPath<R, T>(root: () => R, accessor: AccessorFunctio
   /**
    * Return a Proxy that pushes accessors to accessPath, recursively
    */
-  const createAccessPathFiller = <T>(root: () => T, accessPath: AccessPart[]): Access<any> => {
+  const createAccessPathFiller = <T>(root: () => T, accessPath: AccessPart[]): Access<T> => {
     const funcProxy = lazy(
       () =>
         new Proxy(() => {}, {
@@ -121,7 +120,7 @@ export function getAccessFuncPath<R, T>(root: () => R, accessor: AccessorFunctio
         },
       }
     );
-    return fillerProxy;
+    return fillerProxy as Access<T>;
   };
 
   const accessPath: AccessPart[] = [];
@@ -132,8 +131,7 @@ export function getAccessFuncPath<R, T>(root: () => R, accessor: AccessorFunctio
   return accessPath;
 }
 
-export function getAccessorPath<A extends Accessor<any>>(accessor: A): AccessPath {
-  const access = accessor as Accessor<any>;
+export function getAccessorPath<A extends Accessor>(access: A): AccessPath {
   if (isAccessPath(access)) {
     return access;
   } else if (isAccessFunc(access)) {
@@ -143,11 +141,12 @@ export function getAccessorPath<A extends Accessor<any>>(accessor: A): AccessPat
   }
 }
 
-export function idPredicate(id: string | number): (i: any) => boolean {
-  return (i: any) =>
-    ("id" in i && id === i["id"]) ||
+export function idPredicate(id: string | number): (i: unknown) => boolean {
+  return (i: unknown) =>
+  typeof i === "object" && i != null &&
+    (("id" in i && id === i["id"]) ||
     ("guid" in i && id === i["guid"]) ||
-    ("uuid" in i && id === i["uuid"]);
+    ("uuid" in i && id === i["uuid"]));
 }
 
 export function locateById<R>(array: R, id: string | number): any {

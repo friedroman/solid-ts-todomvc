@@ -1,4 +1,5 @@
-import {freeze, State, unwrap} from "solid-js";
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
+import { batch, State, unwrap } from "solid-js";
 import { deepEqual, setInArray, setInObject } from "./utils";
 import {
   Accessor,
@@ -11,24 +12,19 @@ import {
   getAccessFuncPath,
   isAccessPredicate,
   isAccessSelector,
-  self,
   UnitAccessor,
 } from "./access";
 
-type ValueTransformFunc<A extends Accessor<any>> = (
-  value: AccessorTargetType<A>
-) => AccessorTargetType<A>;
-export type ValueTransformer<A extends Accessor<any>> =
-  | Partial<AccessorTargetType<A>>
-  | AccessorTargetType<A>
-  | ValueTransformFunc<A>;
+export type MutatorFunc<T> = ( value: T) => T | Partial<T>;
+export type Value<T> = Partial<T> | T | MutatorFunc<T>;
+export type ValueTransformer<A extends Accessor> = Value<AccessorTargetType<A>>;
 
 export type Mutation = [AccessPath, ValueTransformer<any>];
 export type Mutations = Mutation[];
 export type CommitMutations<R> = (root: R, m: Mutations) => R;
-export function isTransformFunc<A extends Accessor<any>>(
+export function isTransformFunc<A extends Accessor>(
   transformer: ValueTransformer<A>
-): transformer is ValueTransformFunc<A> {
+): transformer is MutatorFunc<AccessorTargetType<A>> {
   return typeof transformer === "function";
 }
 
@@ -37,7 +33,7 @@ export function setFromAccessorChain<
   A extends AccessPath,
   V extends ValueTransformer<A>
 >(root: R, accessorChain: A, value: V): R {
-  const applyValue = (r: R): R => (isTransformFunc(value) ? value(r) : value) as R;
+  const applyValue = (r: any) => (typeof value === "function" ? value(r) : value) as R;
   if (accessorChain.length === 0) {
     // root is the target
     const newNode = applyValue(root);
@@ -52,31 +48,26 @@ export function setFromAccessorChain<
       if (!Array.isArray(r)) {
         throw new Error("Unexpected selector in path, value is not array");
       }
-      return r.reduce((l, t) => {
-        l.push(setFromAccessorChain(t, nextAccessors, value));
-        return l;
-      }, []);
+
+      const changed: any[] = [];
+      r.forEach((t) => {
+        changed.push(setFromAccessorChain(t, nextAccessors, value));
+      });
+      return changed as R;
     }
     if (isAccessPredicate(part)) {
       if (!Array.isArray(r)) {
         throw new Error("Unexpected predicate in path, value is not array");
       }
       const [nestedPath, value] = part;
-      const modified: [number, any][] = r.reduce((l, t, i) => {
-        const nestedValue = getFromAccessorChain(t, nestedPath);
+      const changed = r.map((t) => {
+        const nestedValue: any = getFromAccessorChain(t, nestedPath);
         if (!deepEqual(nestedValue, value)) {
-          return l;
-        }
-        l.push([i, setFromAccessorChain(t, nextAccessors, value)]);
-        return l;
-      }, []);
-      return r.map((t, i) => {
-        const modification = modified.find(([mi]) => i === mi);
-        if (!modification) {
           return t;
         }
-        return modification[1];
-      }) as any;
+        return setFromAccessorChain(t, nextAccessors, value);
+      });
+      return changed as R;
     }
 
     const key = part as keyof R;
@@ -129,33 +120,34 @@ export class Mutagen<R> {
   /**
    * Set subproperty value using accessor function
    */
-  set<T, A extends AccessorFunction<R, T>>(accessor: A, value: ValueTransformer<A>): this;
+  set<T>(accessor: AccessorFunction<R, T>, value: Value<T>): this;
 
   /**
    * Set subproperty value using accessor chain
    */
-  set<T, A extends AccessPath>(accessor: A, value: ValueTransformer<A>): this;
+  set<T, A extends AccessPath>(accessor: A, value: Value<unknown>): this;
 
   /**
    * Set subproperty value
    */
-  set<T, A extends Accessor<R, T>>(accessor: A, value: ValueTransformer<A>): this {
+  set<A extends Accessor>(accessor: A, value: ValueTransformer<A>): this {
     this.mutations.push([getAccessorPath(accessor), value]);
     return this;
   }
 
-  self<A extends UnitAccessor<R>>(value: ValueTransformer<A>): this {
-    return this.set(self, value);
-  }
-
-  selfNow<A extends UnitAccessor<R>>(value: ValueTransformer<A>): this {
-    this.set(self, value).engage();
+  self(value: Value<R>): this {
+    this.mutations.push([[], value]);
     return this;
   }
 
-  setNow<T, A extends AccessPath>(accessor: A, value: ValueTransformer<A>): this;
-  setNow<T, A extends AccessorFunction<R, T>>(accessor: A, value: ValueTransformer<A>): this;
-  setNow<T, A extends Accessor<R, T>>(accessor: A, value: ValueTransformer<A>): this {
+  selfNow(value: Value<R>): this {
+    this.self(value).engage();
+    return this;
+  }
+
+  setNow<T>(accessor: AccessorFunction<R, T>, value: Value<T>): this;
+  setNow<T, A extends AccessPath>(accessor: A, value: Value<unknown>): this;
+  setNow<T, A extends Accessor>(accessor: A, value: ValueTransformer<A>): this {
     this.set(getAccessorPath(accessor), value).engage();
     return this;
   }
@@ -247,7 +239,7 @@ export function setStateMutator<R>([state, setState]: [State<R>, any]): Mutagen<
           value,
         ];
       });
-      freeze(() => {
+      batch(() => {
         map.forEach((i) => setState(...i));
       });
       return state as R;
@@ -258,12 +250,12 @@ export function setStateMutator<R>([state, setState]: [State<R>, any]): Mutagen<
 /**
  * Update immutable tree
  */
-export function set<R, T, A extends Accessor<R, T>>(
+export function set<R, T, A extends Accessor>(
   root: R,
   accessor: A,
   value?: ValueTransformer<A>
 ): R {
-  const access = accessor as Accessor<R, T>;
+  const access = accessor as Accessor;
   return setFromAccessorChain(
     root,
     isAccessFunc(access) ? getAccessFuncPath(() => root, access) : (accessor as AccessPath),

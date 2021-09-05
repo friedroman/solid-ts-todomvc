@@ -1,5 +1,6 @@
-import { createEffect, createState } from "solid-js";
+import {createComputed, createEffect, createState} from "solid-js";
 import { setStateMutator } from "./utils/set";
+import {Access, AccessorTargetType} from "./utils/access";
 
 const LOCAL_STORAGE_KEY = "todos-solid";
 
@@ -53,7 +54,7 @@ export default function createTodosStore(): [Store, Actions] {
 
   // JSON.stringify creates deps on every iterable field
   createEffect(() => localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state)));
-  createEffect(() => {
+  createComputed(() => {
     const completedCount = state.todos.filter((todo) => todo.completed).length;
     mut.selfNow({ completedCount, remainingCount: state.todos.length - completedCount });
   });
@@ -78,7 +79,7 @@ export default function createTodosStore(): [Store, Actions] {
           (s) => s.todos,
           (t) => t.filter((item) => item.id !== todoId)
         ),
-      editTodo: (todo) => mut.setNow((s) => s.todos.$filter((t) => t.id, todo.id), todo),
+      editTodo: (todo) => mut.setNow<Todo>((s) => s.todos.$filter((t) => t.id, todo.id), todo),
       clearCompleted: () =>
         mut.setNow(
           (s) => s.todos,

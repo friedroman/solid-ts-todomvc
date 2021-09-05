@@ -1,19 +1,26 @@
-import {createEffect, createMemo, createResource, createSignal, createState, Index, untrack,} from "solid-js";
-import {For} from "solid-js/dom";
-import {setStateMutator} from "./utils/set";
-import {ChunkProps, Measurements, VirtProps, VirtualState} from "./virtual_types";
-import get = Reflect.get;
+import {
+  batch,
+  createComputed,
+  createMemo,
+  createResource,
+  createSignal,
+  createState,
+  State,
+} from "solid-js";
+import { For, Index } from "solid-js/web";
+import { setStateMutator } from "./utils/set";
+import { ChunkProps, Measurements, VirtProps, VirtualState } from "./virtual_types";
 
 function Chunk<T>(props: ChunkProps<T>): any {
-  const state = props.state;
-  const dataFn = () => props.data({ from: state.start, length: state.length });
-  const [data, load] = createResource<T[]>([]);
-  createEffect(() => {
-    untrack(() =>
-      console.log("Chunk reload: {", state.id, ",", state.start, ":", state.length, "H:", state.itemsHeight, "}", data())
-    );
-    load(dataFn);
-  });
+  const [state, set] = createState(props.state);
+  const key = () => ({ from: state.start, length: state.length });
+  const [data, load] = createResource(key, props.data);
+  // createEffect(() => {
+  //   untrack(() =>
+  //     console.log("Chunk reload: {", state.id, ",", state.start, ":", state.length, "H:", state.itemsHeight, "}", data())
+  //   );
+  //   load.refetch();
+  // });
   return (
     <Index
       fallback={<li class="virtual-row" style={{ height: `${state.itemsHeight}px` }} />}
@@ -34,12 +41,12 @@ export function VirtualList<T, U>({
 }: VirtProps<T>): any {
   let topSpace: ElementRef, bottomSpace: ElementRef;
 
-  function updateVirtualSpaces(measurements: Measurements) {
-    const newCoeff =
-      spaceAbove() > 0
-        ? spaceAbove() / (state.chunks[0].start * measurements.measured.averageHeight)
-        : 1.0;
-    mutator.selfNow({ ...measurements.measured, spaceAboveCoeff: newCoeff });
+  function updateVirtualSpaces(msrm: Measurements) {
+    const expectedHeight = msrm.spaceBefore + msrm.compensationDelta;
+    const computedHeight = state.chunks[0].start * msrm.measured.averageHeight;
+    const newCoeff = state.chunks[0].start > 0 ? expectedHeight / computedHeight : 1.0;
+    mutator.selfNow({ ...msrm.measured, spaceAboveCoeff: newCoeff });
+    console.log("New coeff: , height", newCoeff, expectedHeight, state.spaceBefore);
   }
 
   function updateViewport(msrm: Measurements) {
@@ -78,10 +85,13 @@ export function VirtualList<T, U>({
         //todo incremental shift up
       }
     }
-    if (bottomIntersects && lastIndex() !== t) {
-      console.log("Shift down");
-      shiftDown(msrm);
-    }
+    batch(() => {
+      if (bottomIntersects && lastIndex() !== t) {
+        console.log("Shift down");
+        shiftDown(msrm);
+      }
+      updateVirtualSpaces(msrm);
+    });
   }
 
   const [scroll, setScroll] = createSignal(0),
@@ -90,29 +100,41 @@ export function VirtualList<T, U>({
       measuredItemsCount: 0,
       spaceAboveCoeff: 1,
       chunks: [{ id: 0, start: 0, length: 20, itemsHeight: 40 * 20, measured: false }],
-      get spaceAbove() {
-        return this.chunks[0].start * this.averageHeight * this.spaceAboveCoeff;
+      get spaceBefore() {
+        return spaceBefore();
       },
-      get nextChunkStartIndex(): number {
-        const chunk = this.chunks[this.chunks.length - 1];
+      get nextChunkStartIndex() {
+        const st = this as State<VirtualState<T>>;
+        const lastIdx = st.chunks.length - 1;
+        const chunk = st.chunks[lastIdx];
         return chunk.start + chunk.length;
       },
+      get total() {
+        return totalRes() ?? 0;
+      },
+      get spaceAfter() {
+        return spaceBelow();
+      },
     }),
-    [totalRes, loadTotal] = createResource<number>(0),
+    spaceBefore: () => number = createMemo((previous) => {
+      const approxHeight = state.chunks[0].start * state.averageHeight;
+      const current = approxHeight * state.spaceAboveCoeff;
+      console.log("Above", previous, "->", current, " approx:", approxHeight);
+      return current;
+    }),
+    [totalRes, loadTotal] = createResource(() => "total", total),
     chunks: HTMLElement[][] = [],
     mutator = setStateMutator([state, setState]),
     scroller = document.scrollingElement!,
-    spaceAbove = () => state.chunks[0].start * state.averageHeight * state.spaceAboveCoeff,
     lastIndex = () => {
       const chunk = state.chunks[state.chunks.length - 1];
       return chunk.start + chunk.length;
     },
-    spaceBelow = createMemo((previous) => {
-      const total = totalRes() ?? 0;
-      const rowsBelow = Math.max(total - lastIndex(), 0);
+    spaceBelow: () => number = createMemo((previous) => {
+      const rowsBelow = Math.max(state.total - lastIndex(), 0);
       const newSpace = rowsBelow * state.averageHeight;
       // eslint-disable-next-line prettier/prettier
-      console.log("Updating space below", previous, "->", newSpace, "below:", rowsBelow, "/", total);
+      console.log("Updating space below", previous, "->", newSpace, "below:", rowsBelow, "/", state.total);
       return newSpace;
     }, 0),
     shiftUp = () => {},
@@ -123,48 +145,45 @@ export function VirtualList<T, U>({
       }
 
       const diff = msrm.highWatermark - startIndex;
-      const chunkCount = Math.max(1, Math.ceil(diff / msrm.page));
-      for (let i = 0, start = startIndex; i < state.chunks.length && i < chunkCount; i++) {
+      const chunkCount = Math.max(1, Math.ceil(diff / msrm.chunkLength));
+      for (let i = 0, start = startIndex; i < 5 && i < chunkCount; i++) {
         const ch = state.chunks[i];
-        const newLength = Math.min(totalRes()! - startIndex, msrm.chunkLength);
+        const newLength = Math.min(totalRes()! - start, msrm.chunkLength);
         if (newLength <= 0) {
           break;
         }
         const chEndIndex = ch.start + ch.length;
-        if (chEndIndex < msrm.lowWatermark) {
-          const newCoeff = (spaceAbove() + ch.itemsHeight) / (chEndIndex * state.averageHeight);
+        if (chEndIndex < msrm.lowWatermark && ch.measured) {
+          // const newCoeff = (spaceAbove() + ch.itemsHeight) / (chEndIndex * state.averageHeight);
+          msrm.compensationDelta += ch.itemsHeight;
           mutator
-            .set(
-              (s) => s.chunks,
-              ([first, ...chunks]) => [...chunks, first]
-            )
-            .set((s) => s.chunks[state.chunks.length - 1], {
+            .set((s) => s.chunks[0], {
               start: start,
               length: newLength,
               itemsHeight: newLength * state.averageHeight,
               measured: false,
             })
-            .set((s) => s.spaceAboveCoeff, newCoeff);
+            .setNow(
+              (s) => s.chunks,
+              ([first, ...chunks]) => [...chunks, first]
+            );
         } else {
           mutator.setNow(
             (s) => s.chunks,
-            (chunks) => {
-              return [
-                ...chunks,
-                {
-                  id: chunkId++,
-                  start: start,
-                  itemsHeight: newLength * state.averageHeight,
-                  measured: false,
-                  length: newLength,
-                },
-              ];
-            }
+            (chunks) => [
+              ...chunks,
+              {
+                id: chunkId++,
+                start: start,
+                itemsHeight: newLength * state.averageHeight,
+                measured: false,
+                length: newLength,
+              },
+            ]
           );
         }
         start += newLength;
       }
-      mutator.engage();
     },
     intersectCallback: IntersectionObserverCallback = (entries) => {
       entries.forEach((entry) => {
@@ -180,7 +199,6 @@ export function VirtualList<T, U>({
         cancelAnimationFrame(rafId);
       }
       const msrm = measure();
-      updateVirtualSpaces(msrm);
       updateViewport(msrm);
     },
     observer = new IntersectionObserver(intersectCallback, { rootMargin: `${margin * 100}% 0px` });
@@ -196,8 +214,7 @@ export function VirtualList<T, U>({
     observer.observe(topSpace);
     observer.observe(bottomSpace);
   });
-  createEffect(() => loadTotal(total));
-  createEffect(() => {
+  createComputed(() => {
     if (totalRes.loading || (totalRes() ?? 0 < lastIndex())) {
       return;
     }
@@ -258,6 +275,8 @@ export function VirtualList<T, U>({
     const measurements = {
       lowWatermark: Math.max(0, Math.floor(scrollIndex - page * margin)),
       highWatermark: Math.ceil(scrollIndex + page * (margin + 1)),
+      compensationDelta: 0,
+      spaceBefore: state.spaceBefore,
       scrollOffset,
       scrolled,
       scrollTop,
@@ -278,10 +297,14 @@ export function VirtualList<T, U>({
       return;
     }
     measureScheduled = true;
+    const cancelMeasure = () => {
+      if (!measureScheduled) {
+        return;
+      }
+    };
     rafId = requestAnimationFrame((time1) => {
       console.log("Measure 1", time1);
       const measurements1 = measure();
-      updateVirtualSpaces(measurements1);
       updateViewport(measurements1);
       rafId = requestAnimationFrame((time2) => {
         console.log("Measure 2", time1, time2);
@@ -290,7 +313,6 @@ export function VirtualList<T, U>({
         }
         measureScheduled = false;
         const measurements2 = measure();
-        updateVirtualSpaces(measurements2);
         updateViewport(measurements2);
       });
     });
@@ -298,7 +320,7 @@ export function VirtualList<T, U>({
 
   return (
     <>
-      <li ref={topSpace} className="virtual-space-above" style={{ height: `${spaceAbove()}px` }} />
+      <li ref={topSpace} className="virtual-space-above" style={{ height: `${spaceBefore()}px` }} />
       <li className="virtual-parity" />
       <For each={state.chunks}>
         {(chunkState) => {
