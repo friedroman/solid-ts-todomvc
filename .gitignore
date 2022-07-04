@@ -3,3 +3,12 @@ dist/
 node_modules
 .fusebox
 *.mp4
+/.idea/sonarlint/issuestore/
+/yarn-error.log
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions

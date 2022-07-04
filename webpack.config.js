@@ -59,7 +59,6 @@ module.exports = {
           {
             loader: 'ts-loader',
             options: {
-              transpileOnly: true,
               logLevel: 'INFO',
               experimentalWatchApi: true
             },
@@ -77,7 +76,7 @@ module.exports = {
     port: 80
   },
   plugins: [
-    new ForkTsCheckerWebpackPlugin({eslint: {files: './src/**/*.{ts,tsx,js,jsx}', enabled: true}}),
+    new ForkTsCheckerWebpackPlugin(),
     new ForkTsCheckerNotifierWebpackPlugin({title: 'TodoMVC Solid', excludeWarnings: false}),
     new HtmlWebpackPlugin({
       inject: true,
