@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "es2017",
     "module": "es2015",
-    "moduleResolution": "node",
+    "moduleResolution": "Node",
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
     "strict": true,

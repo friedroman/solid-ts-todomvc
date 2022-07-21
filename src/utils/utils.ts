@@ -3,9 +3,10 @@ export const setInObject = <O extends any, K extends keyof O, V extends O[K]>(
   key: K,
   value: V
 ): O =>
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   Object.assign(Object.create(Object.getPrototypeOf(object)), object, {
     [key]: value,
-  });
+  }) as O;
 export const setInArray = <V>(array: V[], index: number, value: V) => [
   ...array.slice(0, Number(index)),
   value,
@@ -22,13 +23,12 @@ export const deepEqual = (a: any, b: any) => {
     return false;
   }
   if (Array.isArray(a)) {
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
-    return arrayEqual(a, b);
+    return Array.isArray(b) ? arrayEqual(a, b) : false;
   }
   if (typeof a === "object") {
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
-    return objectEqual(a, b);
+    return typeof b === "object" ? objectEqual(a, b) : false;
   }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
   return a.valueOf() === b.valueOf();
 };
 export const arrayEqual = (a: any[], b: any[]): boolean => {
@@ -51,7 +51,7 @@ export const arrayEqualShallow = (a: any[], b: any[]): boolean => {
   return true;
 };
 
-export const objectEqual = (a: any, b: any) : boolean => {
+export const objectEqual = (a: any, b: any): boolean => {
   const propsA = Object.getOwnPropertyNames(a);
   const propsB = Object.getOwnPropertyNames(b);
 

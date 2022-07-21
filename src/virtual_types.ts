@@ -1,4 +1,4 @@
-import { JSX } from "solid-js";
+import { JSX } from "solid-js/types/jsx";
 
 export interface RangeRequest {
   from: number;
@@ -53,7 +53,7 @@ export type VirtualState<T> = {
   spaceBefore: number;
   spaceAfter: number;
   nextChunkStartIndex: number;
-  total: number; 
+  total: number;
   chunks: Chunk<T>[];
   averageHeight: number;
   measuredItemsCount: number;

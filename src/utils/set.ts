@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
-import { batch, State, unwrap } from "solid-js";
+import { batch } from "solid-js";
+import { Store, unwrap} from "solid-js/store"
 import { deepEqual, setInArray, setInObject } from "./utils";
 import {
   Accessor,
@@ -215,9 +216,9 @@ export class Mutagen<R> {
 /**
  * Fluently mutate solid reactive tree
  */
-export function setStateMutator<R>([state, setState]: [State<R>, any]): Mutagen<R> {
+export function setStateMutator<R>([state, setState]: [Store<R>, any]): Mutagen<R> {
   return new Mutagen(
-    () => state as R,
+    () => state,
     [],
     [],
     (root, m) => {
@@ -242,7 +243,7 @@ export function setStateMutator<R>([state, setState]: [State<R>, any]): Mutagen<
       batch(() => {
         map.forEach((i) => setState(...i));
       });
-      return state as R;
+      return state;
     }
   );
 }
@@ -255,7 +256,7 @@ export function set<R, T, A extends Accessor>(
   accessor: A,
   value?: ValueTransformer<A>
 ): R {
-  const access = accessor as Accessor;
+  const access = accessor;
   return setFromAccessorChain(
     root,
     isAccessFunc(access) ? getAccessFuncPath(() => root, access) : (accessor as AccessPath),

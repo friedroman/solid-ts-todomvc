@@ -4,16 +4,14 @@ import {
   createMemo,
   createResource,
   createSignal,
-  createState,
-  State,
-  unwrap,
 } from "solid-js";
+import {createStore, Store, unwrap} from "solid-js/store";
 import { For, Index } from "solid-js/web";
 import { setStateMutator } from "./utils/set";
 import { ChunkMsrmt, ChunkProps, Measurements, VirtProps, VirtualState } from "./virtual_types";
 
 function Chunk<T>(props: ChunkProps<T>): any {
-  const [state, set] = createState(props.state);
+  const [state, set] = createStore(props.state);
   const key = () => ({ from: state.start, length: state.length });
   const [data, load] = createResource(key, props.data);
   // createEffect(() => {
@@ -98,7 +96,7 @@ export function VirtualList<T, U>({
   }
 
   const [scroll, setScroll] = createSignal(0),
-    [state, setState] = createState<VirtualState<T>>({
+    [state, setState] = createStore<VirtualState<T>>({
       averageHeight: initItemHeight,
       measuredItemsCount: 0,
       spaceAboveCoeff: 1,
@@ -115,7 +113,7 @@ export function VirtualList<T, U>({
         return spaceBefore();
       },
       get nextChunkStartIndex() {
-        const st = this as State<VirtualState<T>>;
+        const st = this as Store<VirtualState<T>>;
         const lastIdx = st.chunks.length - 1;
         const chunk = st.chunks[lastIdx];
         return chunk.start + chunk.length;
@@ -367,10 +365,10 @@ export function VirtualList<T, U>({
     <>
       <li
         ref={topSpace}
-        className="virtual-space-above"
+        class="virtual-space-above"
         style={{ height: `${state.spaceBefore}px` }}
       />
-      <li className="virtual-parity" />
+      <li class="virtual-parity" />
       <For each={state.chunks}>
         {(chunkState) => {
           const chunk = (
@@ -391,7 +389,7 @@ export function VirtualList<T, U>({
       </For>
       <li
         ref={bottomSpace}
-        className="virtual-space-below"
+        class="virtual-space-below"
         style={{ height: `${state.spaceAfter}px` }}
       />
     </>

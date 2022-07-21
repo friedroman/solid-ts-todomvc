@@ -1,4 +1,5 @@
-import { createComputed, createEffect, createState } from "solid-js";
+import { createComputed, createEffect } from "solid-js";
+import { createStore } from "solid-js/store";
 import { setStateMutator } from "./utils/set";
 
 const LOCAL_STORAGE_KEY = "todos-solid";
@@ -48,7 +49,7 @@ function getLocalStore(): Store {
 }
 
 export default function createTodosStore(): [Store, Actions] {
-  const [state, setState] = createState(getLocalStore());
+  const [state, setState] = createStore<Store>(getLocalStore());
   const mut = setStateMutator([state, setState]);
 
   // JSON.stringify creates deps on every iterable field

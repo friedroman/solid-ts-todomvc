@@ -1,10 +1,11 @@
-import {createMemo, createState, onCleanup} from "solid-js";
-import {For, render, Show} from "solid-js/web";
-import createTodosStore, {Actions, ListMode, ShowMode, Store, Todo} from "./store";
+import { createMemo, onCleanup, For, Show } from "solid-js";
+import { createStore } from "solid-js/store";
+import { render } from "solid-js/web";
+import createTodosStore, { Actions, ListMode, ShowMode, Store, Todo } from "./store";
 import "./index.sass";
-import {VirtualList} from "./virtual";
-import {RangeRequest} from "./virtual_types";
-import {arrayEqualShallow} from "./utils/utils";
+import { VirtualList } from "./virtual";
+import { RangeRequest } from "./virtual_types";
+import { arrayEqualShallow } from "./utils/utils";
 
 const setFocus = (el: HTMLElement) => void Promise.resolve().then(() => el.focus());
 
@@ -20,7 +21,7 @@ const TodoApp: TodoApp = () => {
   onCleanup(() => window.removeEventListener("hashchange", locationHandler));
 
   const appSection = (
-    <section className="todoapp">
+    <section class="todoapp">
       <TodoHeader listMode={store.listMode} setListMode={setListMode} addTodo={addTodo} />
       <Show when={store.todos.length > 0}>
         <TodoList {...{ store, toggleAll, editTodo, removeTodo }} />
@@ -43,10 +44,10 @@ const TodoHeader = (props: { listMode: ListMode } & Pick<Actions, "addTodo" | "s
   const onChange = (value: ListMode) => (e: { currentTarget: HTMLInputElement }) =>
     e.currentTarget.checked ? props.setListMode(value) : undefined;
   const header = (
-    <header className="header">
-      <h1 className="title is-1 has-text-centered">Todos</h1>
+    <header class="header">
+      <h1 class="title is-1 has-text-centered">Todos</h1>
       <input
-        className="new-todo input"
+        class="new-todo input"
         type="text"
         autofocus
         placeholder="What needs to be done?"
@@ -111,7 +112,7 @@ interface ListState {
 
 type ListProps = StoreHolder & Pick<Actions, "editTodo" | "removeTodo" | "toggleAll">;
 const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
-  const [state, setState] = createState({} as ListState),
+  const [state, setState] = createStore({} as ListState),
     filterList = createMemo(
       () => {
         if (store.showMode === "active") return store.todos.filter((todo) => !todo.completed);
@@ -120,7 +121,7 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
         else return store.todos;
       },
       [],
-      arrayEqualShallow
+      { equals: arrayEqualShallow }
     ),
     isEditing = (todoId: number) => {
       return state.editingTodoId === todoId;
@@ -147,20 +148,20 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
   let rowId = 0,
     virtRowId = 0;
   return (
-    <section className="main section">
-      <div className="field">
+    <section class="main section">
+      <div class="field">
         <input
           id="toggle-all"
-          className="toggle-all checkbox"
+          class="toggle-all checkbox"
           type="checkbox"
           checked={!store.remainingCount}
           onInput={({ currentTarget }) => toggleAll(currentTarget.checked)}
         />
-        <label className="label" htmlFor="toggle-all" />
+        <label class="label" for="toggle-all" />
       </div>
-      <div className="lists-container">
+      <div class="lists-container">
         <Show when={store.listMode !== "virtual"}>
-          <ul className="todo-list list">
+          <ul class="todo-list list">
             <For each={filterList()}>
               {(todo, index) => (
                 <TodoItem
@@ -180,7 +181,7 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
           </ul>
         </Show>
         <Show when={store.listMode != null && store.listMode !== "plain"}>
-          <ul className="todo-list list">
+          <ul class="todo-list list">
             <VirtualList data={sliceTodos} total={() => Promise.resolve(filterList().length)}>
               {(todo, index) => (
                 <TodoItem
@@ -220,25 +221,22 @@ const TodoItem = ({
   return (
     <li
       data-virtual-row-id={rowId}
-      className="todo list-item box"
+      class="todo list-item box"
       classList={{ completed: todo().completed, editing: isEditing(todo().id) }}>
-      <div className="view control">
+      <div class="view control">
         <input
-          className="toggle checkbox"
+          class="toggle checkbox"
           type="checkbox"
           checked={todo().completed}
           onInput={({ currentTarget: i }) => toggle(todo().id, i.checked)}
         />
         {index ? index() : undefined}
         <label onDblClick={() => setCurrent(todo().id)}>{todo().title}</label>
-        <button
-          className="destroy delete is-small is-pulled-right"
-          onClick={() => remove(todo().id)}
-        />
+        <button class="destroy delete is-small is-pulled-right" onClick={() => remove(todo().id)} />
       </div>
       <Show when={isEditing(todo().id)}>
         <input
-          className="edit"
+          class="edit"
           value={todo().title}
           onBlur={(e) => saveInputValue(e)}
           onKeyUp={(e) => {
@@ -253,12 +251,12 @@ const TodoItem = ({
 };
 
 const TodoFooter = ({ store, clearCompleted }: StoreHolder & Pick<Actions, "clearCompleted">) => (
-  <footer className="footer level">
-    <span className="todo-count level-item">
+  <footer class="footer level">
+    <span class="todo-count level-item">
       <strong>{store.remainingCount}</strong>
       {store.remainingCount === 1 ? " item left" : " items left"}
     </span>
-    <ul className="filters level-item">
+    <ul class="filters level-item">
       <li>
         <a href="#/" classList={{ selected: store.showMode === "all" }}>
           All
@@ -276,7 +274,7 @@ const TodoFooter = ({ store, clearCompleted }: StoreHolder & Pick<Actions, "clea
       </li>
     </ul>
     <Show when={store.completedCount > 0}>
-      <button className="clear-completed button level-item" onClick={clearCompleted}>
+      <button class="clear-completed button level-item" onClick={clearCompleted}>
         Clear completed
       </button>
     </Show>
