@@ -6,10 +6,11 @@ import {
   createSignal,
   createState,
   State,
+  unwrap,
 } from "solid-js";
 import { For, Index } from "solid-js/web";
 import { setStateMutator } from "./utils/set";
-import { ChunkProps, Measurements, VirtProps, VirtualState } from "./virtual_types";
+import { ChunkMsrmt, ChunkProps, Measurements, VirtProps, VirtualState } from "./virtual_types";
 
 function Chunk<T>(props: ChunkProps<T>): any {
   const [state, set] = createState(props.state);
@@ -36,6 +37,8 @@ export function VirtualList<T, U>({
   children,
   data,
   fallback,
+  initChunkLength = 10,
+  initItemHeight = 80,
   total,
   margin = 0.5,
 }: VirtProps<T>): any {
@@ -96,10 +99,18 @@ export function VirtualList<T, U>({
 
   const [scroll, setScroll] = createSignal(0),
     [state, setState] = createState<VirtualState<T>>({
-      averageHeight: 40,
+      averageHeight: initItemHeight,
       measuredItemsCount: 0,
       spaceAboveCoeff: 1,
-      chunks: [{ id: 0, start: 0, length: 20, itemsHeight: 40 * 20, measured: false }],
+      chunks: [
+        {
+          id: 0,
+          start: 0,
+          length: initChunkLength,
+          itemsHeight: initChunkLength * initItemHeight,
+          measured: false,
+        },
+      ],
       get spaceBefore() {
         return spaceBefore();
       },
@@ -140,49 +151,72 @@ export function VirtualList<T, U>({
     shiftUp = () => {},
     shiftDown = (msrm: Measurements) => {
       const startIndex = lastIndex();
-      if (startIndex === (totalRes() ?? 0 - 1)) {
+      if (startIndex === state.total - 1) {
         return;
       }
 
-      const diff = msrm.highWatermark - startIndex;
-      const chunkCount = Math.max(1, Math.ceil(diff / msrm.chunkLength));
-      for (let i = 0, start = startIndex; i < 5 && i < chunkCount; i++) {
-        const ch = state.chunks[i];
-        const newLength = Math.min(totalRes()! - start, msrm.chunkLength);
+      const renderedToWatermarkDistance =
+        msrm.highWatermark - msrm.chunkMeasurements[chunks.length - 1].end;
+      const diff = Math.ceil(renderedToWatermarkDistance / msrm.measured.averageHeight);
+      const chunksNeeded = Math.max(1, Math.ceil(diff / msrm.chunkLength));
+      const firstUnmovable = msrm.chunkMeasurements.findIndex(
+        (chkMsr) => chkMsr.end > msrm.lowWatermark
+      );
+      const chunksAvailableToShift = firstUnmovable == -1 ? state.chunks.length : firstUnmovable;
+      const chunksToShift = Math.min(chunksNeeded, chunksAvailableToShift);
+      const chunksUntouched = state.chunks.length - chunksToShift;
+      console.log(
+        "Diff:",
+        diff,
+        "Needed:",
+        chunksNeeded,
+        "Available:",
+        chunksAvailableToShift,
+        "ToShift:",
+        chunksToShift
+      );
+
+      if (chunksToShift > 0) {
+        mutator.setNow(
+          (s) => s.chunks,
+          (chunks) => chunks.slice(chunksToShift).concat(chunks.slice(0, chunksToShift))
+        );
+      }
+      for (
+        let i = 0, start = startIndex, toShift = chunksToShift;
+        i < chunksNeeded && i < 5;
+        i++, toShift--
+      ) {
+        const newLength = Math.min(state.total - start, msrm.chunkLength);
         if (newLength <= 0) {
           break;
         }
-        const chEndIndex = ch.start + ch.length;
-        if (chEndIndex < msrm.lowWatermark && ch.measured) {
-          // const newCoeff = (spaceAbove() + ch.itemsHeight) / (chEndIndex * state.averageHeight);
+        const chunkUpdate = {
+          start: start,
+          itemsHeight: newLength * state.averageHeight,
+          measured: false,
+          length: newLength,
+        };
+        start += newLength;
+        if (toShift > 0) {
+          //we're updating an already shifted chunk with its new start index and length
+          const index = i + chunksUntouched;
+          const ch = state.chunks[index];
+          //add compensation delta to be applied later to virtual space above
+          //to adjust for change in height and scroll position
           msrm.compensationDelta += ch.itemsHeight;
-          mutator
-            .set((s) => s.chunks[0], {
-              start: start,
-              length: newLength,
-              itemsHeight: newLength * state.averageHeight,
-              measured: false,
-            })
-            .setNow(
-              (s) => s.chunks,
-              ([first, ...chunks]) => [...chunks, first]
-            );
+          mutator.setNow((s) => s.chunks[index], chunkUpdate);
         } else {
+          //we're adding a new chunk
           mutator.setNow(
             (s) => s.chunks,
-            (chunks) => [
-              ...chunks,
-              {
+            (chunks) =>
+              chunks.concat({
                 id: chunkId++,
-                start: start,
-                itemsHeight: newLength * state.averageHeight,
-                measured: false,
-                length: newLength,
-              },
-            ]
+                ...chunkUpdate,
+              })
           );
         }
-        start += newLength;
       }
     },
     intersectCallback: IntersectionObserverCallback = (entries) => {
@@ -244,7 +278,7 @@ export function VirtualList<T, U>({
     const scrollViewport = scroller.clientHeight;
     const { measuredItemsCount, averageHeight } = state;
     const measured = { measuredItemsCount, averageHeight };
-
+    const chunkMsrmts: ChunkMsrmt[] = [];
     for (let i = 0; i < state.chunks.length; i++) {
       const chunk = state.chunks[i];
       const elements = chunks[i];
@@ -255,40 +289,51 @@ export function VirtualList<T, U>({
       const last = elements[elements.length - 1];
       const nextStart = last.nextElementSibling!.getBoundingClientRect().top;
       const itemsHeight = nextStart - first.top;
-      const topDist = first.top - scrollRect.top;
-      // console.log("Measure chunk", unwrap(chunk), itemsHeight, measured);
-      if (itemsHeight === chunk.itemsHeight || chunk.measured) {
+      chunkMsrmts.push({
+        id: chunk.id,
+        startIndex: chunk.start,
+        length: chunk.length,
+        start: first.top,
+        end: nextStart,
+      });
+      if (chunk.measured) {
         continue;
       }
-      const newAverage =
+      measured.averageHeight =
         measured.measuredItemsCount === 0
           ? itemsHeight / chunk.length
           : (measured.averageHeight * measured.measuredItemsCount + itemsHeight) /
             (measured.measuredItemsCount + chunk.length);
-      measured.averageHeight = newAverage;
       measured.measuredItemsCount += chunk.length;
-      mutator.set((root) => root.chunks[i], { itemsHeight, measured: true });
+      mutator.setNow((root) => root.chunks[i], { itemsHeight, measured: true });
     }
-    mutator.engage();
     const scrollIndex = scrolled > 0 ? Math.floor(scrolled / state.averageHeight) : 0;
-    const page = Math.ceil(scrollViewport / state.averageHeight);
-    const measurements = {
-      lowWatermark: Math.max(0, Math.floor(scrollIndex - page * margin)),
-      highWatermark: Math.ceil(scrollIndex + page * (margin + 1)),
+    const page = Math.ceil(scrollViewport / measured.averageHeight);
+    const measurements: Measurements = {
+      lowWatermark: scrollRect.top + scrollTop - scrollViewport * margin,
+      lowWatermarkIndex: Math.max(0, Math.floor(scrollIndex - page * margin)),
+      highWatermark: scrollRect.top + scrollTop + scrollViewport * (margin + 1),
+      highWatermarkIndex: Math.ceil(scrollIndex + page * (margin + 1)),
       compensationDelta: 0,
       spaceBefore: state.spaceBefore,
+      chunkMeasurements: chunkMsrmts,
       scrollOffset,
       scrolled,
       scrollTop,
       scrollViewport,
       scrollIndex,
       page,
-      chunkLength: Math.ceil(page * (1 + margin)),
+      chunkLength: Math.ceil(page * 0.3),
       measured,
       scrollHeight: scroller.scrollHeight,
       time: performance.now(),
     };
-    console.log("Position:", measurements);
+    console.log(
+      `Position s:${scrollIndex} r:[${state.chunks[0].start},${lastIndex()}],
+       w:[${measurements.lowWatermarkIndex},${measurements.highWatermarkIndex}]`,
+      measurements,
+      unwrap(state)
+    );
     return measurements;
   }
 
@@ -320,7 +365,11 @@ export function VirtualList<T, U>({
 
   return (
     <>
-      <li ref={topSpace} className="virtual-space-above" style={{ height: `${spaceBefore()}px` }} />
+      <li
+        ref={topSpace}
+        className="virtual-space-above"
+        style={{ height: `${state.spaceBefore}px` }}
+      />
       <li className="virtual-parity" />
       <For each={state.chunks}>
         {(chunkState) => {
@@ -343,7 +392,7 @@ export function VirtualList<T, U>({
       <li
         ref={bottomSpace}
         className="virtual-space-below"
-        style={{ height: `${spaceBelow()}px` }}
+        style={{ height: `${state.spaceAfter}px` }}
       />
     </>
   );

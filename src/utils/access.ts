@@ -40,16 +40,17 @@ export type AccessArrayValue<T, P extends AccessArrayKeys> = T extends AccessArr
   ? AccessArrayExt<Item>[P]
   : never;
 export type AccessValueExt<T, P extends AccessKeys<T>> = never;
+// eslint-disable-next-line @typescript-eslint/ban-types
 export type AccessPropValue<T, P extends keyof T> = T[P] extends Function ? T[P] : Access<T[P]>;
 
 export type Access<T> = /* NonNullable<T> &
- */  {
-    readonly [P in AccessKeys<T>]-?: P extends keyof T
-      ? AccessPropValue<T, P>
-      : P extends AccessArrayKeys
-      ? AccessArrayValue<T, P>
-      : never;
-  };
+ */ {
+  readonly [P in AccessKeys<T>]-?: P extends keyof T
+    ? AccessPropValue<T, P>
+    : P extends AccessArrayKeys
+    ? AccessArrayValue<T, P>
+    : never;
+};
 
 export type AccessorFunction<R = any, T = any> = (root: Access<R>) => Access<T>;
 export type Accessor = AccessPath | AccessorFunction<any>;
@@ -60,7 +61,6 @@ export type AccessorTargetType<A extends Accessor> = A extends AccessorFunction<
   : any;
 
 export type UnitAccessor<T> = AccessorFunction<T, T>;
-
 
 export function isAccessPath<R, T>(accessor: Accessor): accessor is AccessPath {
   return Array.isArray(accessor);
@@ -97,7 +97,7 @@ export function getAccessFuncPath<R, T>(root: () => R, accessor: AccessorFunctio
           apply(target: (...args: any[]) => any, thisArg: any, argArray?: any[]): any {
             if (argArray && argArray.length == 2) {
               const [access, value] = argArray;
-              const path = getAccessFuncPath(root, access);
+              const path = getAccessFuncPath(root, access as AccessorFunction<T, unknown>);
               accessPath.push([path, value]);
             }
           },
@@ -141,21 +141,6 @@ export function getAccessorPath<A extends Accessor>(access: A): AccessPath {
   }
 }
 
-export function idPredicate(id: string | number): (i: unknown) => boolean {
-  return (i: unknown) =>
-  typeof i === "object" && i != null &&
-    (("id" in i && id === i["id"]) ||
-    ("guid" in i && id === i["guid"]) ||
-    ("uuid" in i && id === i["uuid"]));
-}
-
-export function locateById<R>(array: R, id: string | number): any {
-  if (!Array.isArray(array)) {
-    throw new Error("Unexpected container for id lookup");
-  }
-  return array.find(idPredicate(id));
-}
-
 export function collectOrError<R = any>(
   root: R,
   f: (list: any[], item: any, index: number) => any[],
@@ -168,10 +153,7 @@ export function collectOrError<R = any>(
   }
 }
 
-export function getFromAccessorChain<R extends any, A extends AccessPath>(
-  root: R,
-  accessorChain: A
-): any {
+export function getFromAccessorChain<R, A extends AccessPath>(root: R, accessorChain: A): any {
   if (accessorChain.length === 0) {
     // root is the target
     return root;

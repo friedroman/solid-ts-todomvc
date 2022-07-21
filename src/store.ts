@@ -1,6 +1,5 @@
-import {createComputed, createEffect, createState} from "solid-js";
+import { createComputed, createEffect, createState } from "solid-js";
 import { setStateMutator } from "./utils/set";
-import {Access, AccessorTargetType} from "./utils/access";
 
 const LOCAL_STORAGE_KEY = "todos-solid";
 

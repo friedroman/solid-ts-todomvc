@@ -28,11 +28,11 @@ export function isTransformFunc<A extends Accessor>(
   return typeof transformer === "function";
 }
 
-export function setFromAccessorChain<
-  R extends any,
-  A extends AccessPath,
-  V extends ValueTransformer<A>
->(root: R, accessorChain: A, value: V): R {
+export function setFromAccessorChain<R, A extends AccessPath, V extends ValueTransformer<A>>(
+  root: R,
+  accessorChain: A,
+  value: V
+): R {
   const applyValue = (r: any) => (typeof value === "function" ? value(r) : value) as R;
   if (accessorChain.length === 0) {
     // root is the target
@@ -53,7 +53,7 @@ export function setFromAccessorChain<
       r.forEach((t) => {
         changed.push(setFromAccessorChain(t, nextAccessors, value));
       });
-      return changed as R;
+      return changed as unknown as R;
     }
     if (isAccessPredicate(part)) {
       if (!Array.isArray(r)) {
@@ -67,7 +67,7 @@ export function setFromAccessorChain<
         }
         return setFromAccessorChain(t, nextAccessors, value);
       });
-      return changed as R;
+      return changed as unknown as R;
     }
 
     const key = part as keyof R;

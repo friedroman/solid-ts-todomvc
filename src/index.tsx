@@ -1,12 +1,12 @@
-import { createMemo, createState, onCleanup } from "solid-js";
-import { render, Show, For } from "solid-js/web";
-import createTodosStore, { Actions, ListMode, ShowMode, Store, Todo } from "./store";
-import "babel-plugin-jsx-dom-expressions";
+import {createMemo, createState, onCleanup} from "solid-js";
+import {For, render, Show} from "solid-js/web";
+import createTodosStore, {Actions, ListMode, ShowMode, Store, Todo} from "./store";
 import "./index.sass";
-import { VirtualList } from "./virtual";
-import { RangeRequest } from "./virtual_types";
+import {VirtualList} from "./virtual";
+import {RangeRequest} from "./virtual_types";
+import {arrayEqualShallow} from "./utils/utils";
 
-const setFocus = (el: HTMLElement) => Promise.resolve().then(() => el.focus());
+const setFocus = (el: HTMLElement) => void Promise.resolve().then(() => el.focus());
 
 type TodoApp = () => any;
 
@@ -112,11 +112,16 @@ interface ListState {
 type ListProps = StoreHolder & Pick<Actions, "editTodo" | "removeTodo" | "toggleAll">;
 const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
   const [state, setState] = createState({} as ListState),
-    filterList = createMemo((todos: Todo[]) => {
-      if (store.showMode === "active") return store.todos.filter((todo) => !todo.completed);
-      else if (store.showMode === "completed") return store.todos.filter((todo) => todo.completed);
-      else return store.todos;
-    }, []),
+    filterList = createMemo(
+      () => {
+        if (store.showMode === "active") return store.todos.filter((todo) => !todo.completed);
+        else if (store.showMode === "completed")
+          return store.todos.filter((todo) => todo.completed);
+        else return store.todos;
+      },
+      [],
+      arrayEqualShallow
+    ),
     isEditing = (todoId: number) => {
       return state.editingTodoId === todoId;
     },
@@ -139,6 +144,8 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
   const sliceTodos = (request: RangeRequest) => {
     return filterList().slice(request.from, request.from + request.length);
   };
+  let rowId = 0,
+    virtRowId = 0;
   return (
     <section className="main section">
       <div className="field">
@@ -165,7 +172,7 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
                     remove,
                     setCurrent,
                     save,
-                    key: todo.id,
+                    rowId: rowId++,
                   }}
                 />
               )}
@@ -177,7 +184,16 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
             <VirtualList data={sliceTodos} total={() => Promise.resolve(filterList().length)}>
               {(todo, index) => (
                 <TodoItem
-                  {...{ todo, index, isEditing, toggle, remove, setCurrent, save, key: todo().id }}
+                  {...{
+                    todo,
+                    index,
+                    isEditing,
+                    toggle,
+                    remove,
+                    setCurrent,
+                    save,
+                    rowId: virtRowId++,
+                  }}
                 />
               )}
             </VirtualList>
@@ -188,12 +204,22 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
   );
 };
 
-type ItemProps = { todo: () => Todo; index: () => number } & ListActions;
-const TodoItem = ({ todo, index, isEditing, toggle, remove, setCurrent, save }: ItemProps) => {
+type ItemProps = { todo: () => Todo; index: () => number; rowId: number } & ListActions;
+const TodoItem = ({
+  todo,
+  index,
+  isEditing,
+  toggle,
+  remove,
+  setCurrent,
+  save,
+  rowId,
+}: ItemProps) => {
   const saveInputValue = ({ currentTarget }: { currentTarget: HTMLInputElement }) =>
     save(todo().id, currentTarget.value.trim());
   return (
     <li
+      data-virtual-row-id={rowId}
       className="todo list-item box"
       classList={{ completed: todo().completed, editing: isEditing(todo().id) }}>
       <div className="view control">
@@ -257,4 +283,5 @@ const TodoFooter = ({ store, clearCompleted }: StoreHolder & Pick<Actions, "clea
   </footer>
 );
 
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 render(TodoApp, document.getElementById("main")!);

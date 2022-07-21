@@ -31,7 +31,7 @@ export const deepEqual = (a: any, b: any) => {
   }
   return a.valueOf() === b.valueOf();
 };
-export const arrayEqual = (a: any[], b: any[]) => {
+export const arrayEqual = (a: any[], b: any[]): boolean => {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     if (!deepEqual(a[i], b[i])) {
@@ -40,7 +40,18 @@ export const arrayEqual = (a: any[], b: any[]) => {
   }
   return true;
 };
-export const objectEqual = (a: any, b: any) => {
+
+export const arrayEqualShallow = (a: any[], b: any[]): boolean => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
+};
+
+export const objectEqual = (a: any, b: any) : boolean => {
   const propsA = Object.getOwnPropertyNames(a);
   const propsB = Object.getOwnPropertyNames(b);
 

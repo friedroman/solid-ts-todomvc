@@ -10,7 +10,10 @@ export interface Measurements {
   scrollOffset: number;
   scrolled: number;
   lowWatermark: number;
+  lowWatermarkIndex: number;
+  chunkMeasurements: ChunkMsrmt[];
   highWatermark: number;
+  highWatermarkIndex: number;
   spaceBefore: number;
   scrollTop: number;
   scrollViewport: number;
@@ -22,11 +25,21 @@ export interface Measurements {
   time: number;
 }
 
+export interface ChunkMsrmt {
+  id: number;
+  startIndex: number;
+  length: number;
+  start: number;
+  end: number;
+}
+
 export type VirtProps<T> = {
   data: (request: RangeRequest) => T[] | Promise<T[]>;
   total: () => Promise<number>;
   fallback?: any;
   margin?: number;
+  initChunkLength?: number;
+  initItemHeight?: number;
   children: (item: () => T, index: () => number) => JSX.Element;
 };
 type Chunk<T> = {
