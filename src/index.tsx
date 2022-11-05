@@ -1,4 +1,4 @@
-import { createMemo, onCleanup, For, Show } from "solid-js";
+import { Accessor, createMemo, For, onCleanup, Show, VoidComponent } from "solid-js";
 import { createStore } from "solid-js/store";
 import { render } from "solid-js/web";
 import createTodosStore, { Actions, ListMode, ShowMode, Store, Todo } from "./store";
@@ -9,12 +9,19 @@ import { arrayEqualShallow } from "./utils/utils";
 
 const setFocus = (el: HTMLElement) => void Promise.resolve().then(() => el.focus());
 
-type TodoApp = () => any;
-
-const TodoApp: TodoApp = () => {
+const TodoApp = () => {
   const [
     store,
-    { addTodo, toggleAll, editTodo, removeTodo, clearCompleted, setVisibility, setListMode },
+    {
+      addTodo,
+      toggleAll,
+      editTodo,
+      removeTodo,
+      clearCompleted,
+      setVisibility,
+      setListMode,
+      generateTodos,
+    },
   ] = createTodosStore();
   const locationHandler = () => setVisibility((location.hash.slice(2) as ShowMode) || "all");
   window.addEventListener("hashchange", locationHandler);
@@ -23,14 +30,15 @@ const TodoApp: TodoApp = () => {
   const appSection = (
     <section class="todoapp">
       <TodoHeader listMode={store.listMode} setListMode={setListMode} addTodo={addTodo} />
+      <GeneratePanel maxIndex={store.todos.length - 1} generateTodos={generateTodos} />
       <Show when={store.todos.length > 0}>
         <TodoList {...{ store, toggleAll, editTodo, removeTodo }} />
         <TodoFooter store={store} clearCompleted={clearCompleted} />
       </Show>
     </section>
-  ) as HTMLElement;
+  );
   const obs = new MutationObserver((mutations) => console.log("DOM Mutations", mutations));
-  obs.observe(appSection, {
+  obs.observe(appSection as Node, {
     attributeOldValue: true,
     characterDataOldValue: true,
     subtree: true,
@@ -94,6 +102,45 @@ const TodoHeader = (props: { listMode: ListMode } & Pick<Actions, "addTodo" | "s
   return header;
 };
 
+const GeneratePanel: VoidComponent<{
+  generateTodos: (index: number, count: number) => void;
+  maxIndex: number
+}> = (props) => {
+  const [st, set] = createStore<{ index: number; count: number }>({ index: 0, count: 1 });
+  return (
+    <section>
+      <div class="field">
+        <label class="label">
+          Start index
+          <input
+            class="input"
+            type="number"
+            min="0"
+            max={props.maxIndex}
+            value="0"
+            onInput={({ currentTarget }) => set("index", currentTarget.valueAsNumber)}
+          />
+        </label>
+      </div>
+      <div class="field">
+        <label class="label">
+          Count
+          <input
+            class="input"
+            type="number"
+            min="0"
+            value="1"
+            onInput={({ currentTarget }) => set("count", currentTarget.valueAsNumber)}
+          />
+        </label>
+      </div>
+      <button class="button" onClick={() => props.generateTodos(st.index, st.count)}>
+        Generate
+      </button>
+    </section>
+  );
+};
+
 interface ListActions {
   isEditing: (id: number) => boolean;
   save: (id: number, title: string) => void;
@@ -142,8 +189,8 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
       return editTodo({ id: todoId, completed: completed });
     },
     remove = (todoId: number) => removeTodo(todoId);
-  const sliceTodos = (request: RangeRequest) => {
-    return filterList().slice(request.from, request.from + request.length);
+  const sliceTodos = (req: Accessor<RangeRequest>) => {
+    return () => filterList().slice(req().from, req().from + req().length);
   };
   let rowId = 0,
     virtRowId = 0;
@@ -182,7 +229,7 @@ const TodoList = ({ store, editTodo, removeTodo, toggleAll }: ListProps) => {
         </Show>
         <Show when={store.listMode != null && store.listMode !== "plain"}>
           <ul class="todo-list list">
-            <VirtualList data={sliceTodos} total={() => Promise.resolve(filterList().length)}>
+            <VirtualList data={sliceTodos} total={() => filterList().length}>
               {(todo, index) => (
                 <TodoItem
                   {...{
@@ -282,4 +329,4 @@ const TodoFooter = ({ store, clearCompleted }: StoreHolder & Pick<Actions, "clea
 );
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-render(TodoApp, document.getElementById("main")!);
+render(() => <TodoApp />, document.getElementById("main")!);

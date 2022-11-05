@@ -1,4 +1,5 @@
 import { JSX } from "solid-js/types/jsx";
+import { Accessor, Resource } from "solid-js";
 
 export interface RangeRequest {
   from: number;
@@ -34,8 +35,8 @@ export interface ChunkMsrmt {
 }
 
 export type VirtProps<T> = {
-  data: (request: RangeRequest) => T[] | Promise<T[]>;
-  total: () => Promise<number>;
+  data: (request: Accessor<RangeRequest>) => Accessor<T[]> | Resource<T[]>;
+  total: Accessor<number> | Resource<number>;
   fallback?: any;
   margin?: number;
   initChunkLength?: number;
@@ -60,7 +61,7 @@ export type VirtualState<T> = {
   spaceAboveCoeff: number;
 };
 export type ChunkProps<T> = {
-  data: (request: RangeRequest) => T[] | Promise<T[]>;
+  data: (request: Accessor<RangeRequest>) => Accessor<T[]> | Resource<T[]>;
   state: Chunk<T>;
   children: (item: () => T, index: () => number) => JSX.Element;
 };

@@ -1,6 +1,7 @@
 import { createComputed, createEffect } from "solid-js";
 import { createStore } from "solid-js/store";
 import { setStateMutator } from "./utils/set";
+import { LoremIpsum } from "lorem-ipsum";
 
 const LOCAL_STORAGE_KEY = "todos-solid";
 
@@ -32,7 +33,19 @@ export interface Actions {
   toggleAll: (completed: boolean) => void;
   setVisibility: (showMode: ShowMode) => void;
   setListMode: (mode: ListMode) => void;
+  generateTodos: (index: number, count: number) => void;
 }
+
+const lorem = new LoremIpsum({
+  wordsPerSentence: {
+    min: 3,
+    max: 15,
+  },
+  sentencesPerParagraph: {
+    min: 1,
+    max: 5,
+  },
+});
 
 function getLocalStore(): Store {
   const storedString = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -49,7 +62,7 @@ function getLocalStore(): Store {
 }
 
 export default function createTodosStore(): [Store, Actions] {
-  const [state, setState] = createStore<Store>(getLocalStore());
+  const [state, setState] = createStore(getLocalStore());
   const mut = setStateMutator([state, setState]);
 
   // JSON.stringify creates deps on every iterable field
@@ -87,6 +100,16 @@ export default function createTodosStore(): [Store, Actions] {
         ),
       toggleAll: (completed) => mut.setNow((s) => s.todos.$all.completed, completed),
       setVisibility: (showMode) => mut.setNow((s) => s.showMode, showMode),
+      generateTodos: (index, count) => {
+        const generated = new Array<Todo>(count);
+        let counter = state.counter;
+        for (let i = 0; i < count; i++) {
+          generated[i] = { id: counter++, completed: false, title: lorem.generateParagraphs(1) };
+        }
+        setState("counter", counter);
+        setState("todos", (todos) => todos.slice(0, index).concat(generated, todos.slice(index))
+        );
+      },
     },
   ];
 }

@@ -3719,6 +3719,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"commander@npm:^9.3.0":
+  version: 9.4.0
+  resolution: "commander@npm:9.4.0"
+  checksum: a322de584a6ccd1ea83c24f6a660e52d16ffbe2613fcfbb8d2cc68bc9dec637492456d754fe8bb5b039ad843ed8e04fb0b107e581a75f62cde9e1a0ab1546e09
+  languageName: node
+  linkType: hard
+
 "common-tags@npm:^1.8.0":
   version: 1.8.0
   resolution: "common-tags@npm:1.8.0"
@@ -6694,6 +6701,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"lorem-ipsum@npm:^2.0.8":
+  version: 2.0.8
+  resolution: "lorem-ipsum@npm:2.0.8"
+  dependencies:
+    commander: ^9.3.0
+  bin:
+    lorem-ipsum: dist/bin/lorem-ipsum.bin.js
+  checksum: 63049aab1f0fa2887fab11dc8a3882f9eef76b2ebc80d0c13659b45709b5c78c291f3328b999f12441ef74f8e49606be62e97033d76e72551629c1467b7b6528
+  languageName: node
+  linkType: hard
+
 "lower-case@npm:^2.0.2":
   version: 2.0.2
   resolution: "lower-case@npm:2.0.2"
@@ -8414,6 +8432,7 @@ __metadata:
     html-webpack-plugin: ^5.5.0
     idb: ^7.0.2
     jest: ^28.1.2
+    lorem-ipsum: ^2.0.8
     prettier: ^2.7.1
     sass: ^1.53.0
     sass-loader: ^13.0.2
@@ -8990,7 +9009,7 @@ __metadata:
 
 "typescript@patch:typescript@4.3.5#~builtin<compat/typescript>":
   version: 4.3.5
-  resolution: "typescript@patch:typescript@npm%3A4.3.5#~builtin<compat/typescript>::version=4.3.5&hash=7ad353"
+  resolution: "typescript@patch:typescript@npm%3A4.3.5#~builtin<compat/typescript>::version=4.3.5&hash=f456af"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
