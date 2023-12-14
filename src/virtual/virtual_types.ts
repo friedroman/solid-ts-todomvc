@@ -32,6 +32,7 @@ export interface ChunkMsrmt {
   length: number;
   start: number;
   end: number;
+  itemsHeight: number;
 }
 
 export type VirtProps<T> = {

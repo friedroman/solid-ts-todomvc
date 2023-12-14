@@ -3,8 +3,8 @@ import { createStore } from "solid-js/store";
 import { render } from "solid-js/web";
 import createTodosStore, { Actions, ListMode, ShowMode, Store, Todo } from "./store";
 import "./index.sass";
-import { VirtualList } from "./virtual";
-import { RangeRequest } from "./virtual_types";
+import { VirtualList } from "./virtual/virtual";
+import { RangeRequest } from "./virtual/virtual_types";
 import { arrayEqualShallow } from "./utils/utils";
 
 const setFocus = (el: HTMLElement) => void Promise.resolve().then(() => el.focus());
@@ -104,7 +104,7 @@ const TodoHeader = (props: { listMode: ListMode } & Pick<Actions, "addTodo" | "s
 
 const GeneratePanel: VoidComponent<{
   generateTodos: (index: number, count: number) => void;
-  maxIndex: number
+  maxIndex: number;
 }> = (props) => {
   const [st, set] = createStore<{ index: number; count: number }>({ index: 0, count: 1 });
   return (
