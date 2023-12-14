@@ -89,26 +89,24 @@ export const commitPersistent = <R = any>(root: R, mutations: Mutations): R => {
 };
 
 /**
- * A fluent setter with a Proxy-based object tree navigation DSL
- * Can be used to implement efficient mutation and fine-grained change recording
+ * A fluent setter that provides a Proxy-based object tree navigation DSL.
+ * It can be used to efficiently mutate and record fine-grained changes.
+ * 
+ * It supports 3 paradigms for applying changes:
+ *  
+ *  1. In-place mutation: Primitives and nested values are mutated in-place. 
+ *     The mutated value is returned as-is.
+ *  
+ *  2. Immutable persistent mutation: A new value is created by replacing containers 
+ *     on the path from the root to the mutation location. The updated top-level 
+ *     container structurally shares references with unchanged parts of the previous value.
  *
- * It supports any of the 3 paradigms of applying changes:
- *  * Familiar in-place mutation where we change in-place
- *    primitive value or recursively: nested object and it's values,
- *    array, nested array and it's values. Then it returns mutated value as is.
- *  * Immutable persistent mutation where we create a new value
- *    out of the current value by replacing every container on the
- *    path from original root container to the location of an intended mutation in the object tree.
- *    Finally returning updated top-level container that structurally
- *    shares references to all of the inner containers of the previous value
- *    that were not affected by any of the mutations.
- *  * Not mutate the object tree in any way or delay the mutation
- *    until such time that calling code explicitly requested it,
- *    yet at the same time record all the requested mutations in a
- *    fine grained primitives-based summary of the changes to perform
- *    with their path in the object tree and and give access to them to the calling code
+ *  3. Record mutations without changing the object tree until explicitly requested.
+ *     Changes are recorded in a fine-grained summary with paths and values.
+ *     The calling code can access the changes before applying them.
  *
- */
+*/
+
 export class Mutagen<R> {
   private lastRoot?: R;
   constructor(
