@@ -2,7 +2,7 @@
 env          :
   browser: true
   jest   : true
-  es2017 : true
+  es2020 : true
 parser : '@typescript-eslint/parser' #Specifies the ESLint parser
 plugins:
   - '@typescript-eslint'
