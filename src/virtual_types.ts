@@ -56,6 +56,7 @@ export type VirtualState<T> = {
   nextChunkStartIndex: number;
   total: number;
   chunks: Chunk<T>[];
+  lastIndex: number;
   averageHeight: number;
   measuredItemsCount: number;
   spaceAboveCoeff: number;

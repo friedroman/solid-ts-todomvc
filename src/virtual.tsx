@@ -1,4 +1,4 @@
-import { batch, createComputed, createMemo, createSignal, } from "solid-js";
+import { batch, createComputed, createMemo, createSignal } from "solid-js";
 import { createStore, Store, unwrap } from "solid-js/store";
 import { For, Index } from "solid-js/web";
 import { setStateMutator } from "./utils/set";
@@ -26,7 +26,12 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
   const initChunkLength = props.initChunkLength ?? 10;
   const initItemHeight = props.initItemHeight ?? 80;
   const margin = props.margin ?? 0.5;
-  let topSpace: ElementRef, bottomSpace: ElementRef;
+  let topSpace: ElementRef;
+  let bottomSpace: ElementRef;
+  const chunks: HTMLElement[][] = [];
+  const scroller = document.scrollingElement!;
+  let topIntersects = false;
+  let bottomIntersects = false;
 
   function updateVirtualSpaces(msrm: Measurements) {
     const expectedHeight = msrm.spaceBefore + msrm.compensationDelta;
@@ -34,7 +39,13 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
     const computedHeight = startIndex * msrm.measured.averageHeight;
     const newCoeff = startIndex > 0 ? expectedHeight / computedHeight : 1.0;
     mutator.selfNow({ ...msrm.measured, spaceAboveCoeff: newCoeff });
-    console.log("New coeff: , height", newCoeff, expectedHeight, state.spaceBefore);
+    console.log(
+      "New coeff, height, comp, space",
+      newCoeff,
+      expectedHeight,
+      computedHeight,
+      state.spaceBefore
+    );
   }
 
   function updateViewport(msrm: Measurements) {
@@ -71,10 +82,11 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
         jump(start);
       } else {
         //todo incremental shift up
+        shiftUp();
       }
     }
     batch(() => {
-      if (bottomIntersects && lastIndex() !== t) {
+      if (bottomIntersects && state.lastIndex !== t) {
         console.log("Shift down");
         shiftDown(msrm);
       }
@@ -82,8 +94,8 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
     });
   }
 
-  const [scroll, setScroll] = createSignal(0),
-    [state, setState] = createStore<VirtualState<T>>({
+  let chunkId = 1;
+  const [state, setState] = createStore<VirtualState<T>>({
       averageHeight: initItemHeight,
       measuredItemsCount: 0,
       spaceAboveCoeff: 1,
@@ -112,6 +124,10 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
       get spaceAfter() {
         return spaceBelow();
       },
+        get lastIndex() {
+          const chunk = this.chunks[this.chunks.length - 1];
+          return chunk.start + chunk.length;
+        },
     }),
     spaceBefore: () => number = createMemo((previous) => {
       const approxHeight = state.chunks[0].start * state.averageHeight;
@@ -119,35 +135,35 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
       console.log("Above", previous, "->", current, " approx:", approxHeight);
       return current;
     }),
-    chunks: HTMLElement[][] = [],
-    mutator = setStateMutator([state, setState]),
-    scroller = document.scrollingElement!,
-    lastIndex = () => {
-      const chunk = state.chunks[state.chunks.length - 1];
-      return chunk.start + chunk.length;
-    },
     spaceBelow: () => number = createMemo((previous) => {
-      const rowsBelow = Math.max(state.total - lastIndex(), 0);
+      const rowsBelow = Math.max(state.total - state.lastIndex, 0);
       const newSpace = rowsBelow * state.averageHeight;
       // eslint-disable-next-line prettier/prettier
       console.log("Updating space below", previous, "->", newSpace, "below:", rowsBelow, "/", state.total);
       return newSpace;
     }, 0),
+    mutator = setStateMutator([state, setState]),
     shiftUp = () => {},
     shiftDown = (msrm: Measurements) => {
-      const startIndex = lastIndex();
-      if (startIndex === state.total - 1) {
+      const startIndex = state.lastIndex;
+      const total = state.total;
+      const itemsLeft = total - startIndex;
+      if (startIndex === total - 1) {
         return;
       }
 
-      const needToCover = msrm.highWatermark - msrm.chunkMeasurements[chunks.length - 1].end;
+      const chunkMsrm = msrm.chunkMeasurements;
+      const needToCover = msrm.highWatermark - chunkMsrm[chunkMsrm.length - 1].end;
       if (needToCover < msrm.measured.averageHeight * -0.5) {
         console.log("No need to cover", needToCover);
         return;
       }
-      const diff = Math.ceil(needToCover / msrm.measured.averageHeight);
+      const diff = Math.max(
+        1,
+        Math.min(itemsLeft, Math.ceil(needToCover / msrm.measured.averageHeight))
+      );
       const chunksNeeded = Math.max(1, Math.ceil(diff / msrm.chunkLength));
-      const firstUnmovable = msrm.chunkMeasurements.findIndex(
+      const firstUnmovable = chunkMsrm.findIndex(
         (chkMsr) => chkMsr.end > msrm.lowWatermark
       );
       const chunksAvailableToShift = firstUnmovable == -1 ? state.chunks.length : firstUnmovable;
@@ -175,7 +191,7 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
         i < chunksNeeded && i < 5;
         i++, toShift--
       ) {
-        const newLength = Math.min(state.total - start, msrm.chunkLength);
+        const newLength = Math.min(total - start, msrm.chunkLength);
         if (newLength <= 0) {
           break;
         }
@@ -205,8 +221,28 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
           );
         }
       }
-    },
-    intersectCallback: IntersectionObserverCallback = (entries) => {
+    };
+  createComputed(() => {
+    if (state.total == null || state.total >= state.lastIndex) {
+      return;
+    }
+    console.error("Total is less than last index, total", state.total, ", last: ", state.lastIndex);
+    let offset = (state.total ?? 0) - state.lastIndex;
+    for (let i = state.chunks.length - 1; i >= 0 && offset > 0; i--) {
+      const length = state.chunks[i].length;
+      if (length <= offset && i > 0) {
+        mutator.set(
+          (s) => s.chunks,
+          (chunks) => chunks.slice(0, chunks.length - 1)
+        );
+        offset -= length;
+      } else {
+        mutator.set((s) => s.chunks[i].length, length - offset);
+      }
+    }
+    mutator.engage();
+  });
+  const intersectCallback: IntersectionObserverCallback = (entries) => {
       entries.forEach((entry) => {
         if (entry.target === topSpace) {
           topIntersects = entry.isIntersecting;
@@ -223,11 +259,8 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
       updateViewport(msrm);
     },
     observer = new IntersectionObserver(intersectCallback, { rootMargin: `${margin * 100}% 0px` });
-  let measureScheduled = false,
-    rafId: number,
-    chunkId = 1,
-    topIntersects = false,
-    bottomIntersects = false;
+  let measureScheduled = false;
+  let rafId: number;
   void Promise.resolve().then(() => {
     if (!topSpace || !bottomSpace) {
       throw new Error("Top or bottom space ref is not initialized");
@@ -235,26 +268,7 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
     observer.observe(topSpace);
     observer.observe(bottomSpace);
   });
-  createComputed(() => {
-    if (state.total == null || state.total >= lastIndex()) {
-      return;
-    }
-    console.error("Total is less than last index, total", state.total, ", last: ", lastIndex());
-    let offset = (state.total ?? 0) - lastIndex();
-    for (let i = state.chunks.length - 1; i >= 0 && offset > 0; i--) {
-      const length = state.chunks[i].length;
-      if (length <= offset && i > 0) {
-        mutator.set(
-          (s) => s.chunks,
-          (chunks) => chunks.slice(0, chunks.length - 1)
-        );
-        offset -= length;
-      } else {
-        mutator.set((s) => s.chunks[i].length, length - offset);
-      }
-    }
-    mutator.engage();
-  });
+
 
   function measure(): Measurements {
     const top = topSpace!.getBoundingClientRect();
@@ -315,9 +329,12 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
       scrollHeight: scroller.scrollHeight,
       time: performance.now(),
     };
-    console.log(`Position s:${scrollIndex} r:[${state.chunks[0].start},${lastIndex()}],w:[${measurements.lowWatermarkIndex},${measurements.highWatermarkIndex}]`,
+    console.log(
+      `Position s:${scrollIndex} r:[${state.chunks[0].start},${state.lastIndex}],w:[${
+        measurements.lowWatermarkIndex
+      },${measurements.highWatermarkIndex}]`,
       measurements,
-        unwrap(state)
+      unwrap(state)
     );
     return measurements;
   }
@@ -350,11 +367,7 @@ export function VirtualList<T, U>(props: VirtProps<T>): any {
 
   return (
     <>
-      <li
-        ref={topSpace}
-        class="virtual-space-above"
-        style={{ height: `${state.spaceBefore}px` }}
-      />
+      <li ref={topSpace} class="virtual-space-above" style={{ height: `${state.spaceBefore}px` }} />
       <li class="virtual-parity" />
       <For each={state.chunks}>
         {(chunkState) => {

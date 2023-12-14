@@ -37,14 +37,14 @@ const TodoApp = () => {
       </Show>
     </section>
   );
-  const obs = new MutationObserver((mutations) => console.log("DOM Mutations", mutations));
-  obs.observe(appSection as Node, {
-    attributeOldValue: true,
-    characterDataOldValue: true,
-    subtree: true,
-    childList: true,
-  });
-  onCleanup(() => obs.disconnect());
+  // const obs = new MutationObserver((mutations) => console.log("DOM Mutations", mutations));
+  // obs.observe(appSection as Node, {
+  //   attributeOldValue: true,
+  //   characterDataOldValue: true,
+  //   subtree: true,
+  //   childList: true,
+  // });
+  // onCleanup(() => obs.disconnect());
   return appSection;
 };
 
