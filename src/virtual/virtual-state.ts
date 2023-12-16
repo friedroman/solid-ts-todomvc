@@ -1,7 +1,7 @@
 import { Accessor, batch, createComputed, createEffect, createMemo, createSignal, on } from "solid-js";
 import { createStore, Store, unwrap } from "solid-js/store";
 import { setStateMutator } from "../utils/set";
-import { ChunkMsrmt, Measurements, VirtProps, VirtualState } from "./virtual_types";
+import { Chunk, ChunkMsrmt, MeasureStats, Measurements, VirtProps, VirtualState } from "./virtual_types";
 import { equalsEpsilon, withinEpsilon } from "./equalsEpsilon";
 
 type MutationCommands = {
@@ -12,12 +12,14 @@ const PIXELS_EPS = 0.01;
 
 export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationCommands] {
   let chunkId = 1;
+  const margin = props.margin ?? 0.5;
   const initChunkLength = props.initChunkLength ?? 10;
   const initItemHeight = props.initItemHeight ?? 80;
   const [state, setState] = createStore<VirtualState<T>>({
     averageItemLength: initItemHeight,
     measuredItemsCount: 0,
     spaceAboveCoeff: 1,
+    measurements: null,
     chunks: [
       {
         id: 0,
@@ -40,10 +42,47 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
     get lastIndex() {
       return lastIndex();
     },
+    get lowWatermark() {
+      if (!this.measurements) {
+        return 0;
+      }
+      const { scrollTop, scrollerStart, scrollViewport } = this.measurements;
+      return scrollerStart + scrollTop - scrollViewport * margin;
+    },
+    get highWatermark() {
+      const measurements = this.measurements as Measurements;
+      if (measurements == null) {
+        return 0;
+      }
+      const { scrollTop, scrollerStart, scrollViewport } = measurements;
+      return scrollerStart + scrollTop + scrollViewport * (1 + margin);
+    },
+    get lowWatermarkIndex() {
+      const measurements = this.measurements as Measurements;
+      if (measurements == null) {
+        return 0;
+      }
+      const { scrollIndex } = measurements;
+      return Math.max(0, Math.floor(scrollIndex - this.page * margin));
+    },
+    get highWatermarkIndex() {
+      const measurements = this.measurements as Measurements;
+      if (measurements == null) {
+        return initChunkLength;
+      }
+      const { scrollIndex } = measurements;
+      return Math.max(0, Math.ceil(scrollIndex + this.page * margin));
+    },
+    get page() {
+      return page();
+    },
+    get chunkLength() {
+      return Math.ceil(this.page * 0.6);
+    },
   });
-  createEffect(()=> {
-    console.log("Space after", state.spaceAfter, "space before", state.spaceBefore);
-  });
+  // createEffect(()=> {
+  //   console.log("Space before", state.spaceBefore, "Space after", state.spaceAfter);
+  // });
   const lastIndex: Accessor<number> = createMemo(() => {
       // console.log("Last Index memo");
       const chks = state.chunks,
@@ -59,29 +98,32 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
       console.log("lastIndex: ", last, ", chunk: ", unwrap(ch), "chunks count:", chks.length);
       return last;
     }),
-    spaceBefore: Accessor<number> = createMemo((previous) => {
-      const approxLength = state.chunks[0].start * state.averageItemLength;
-      const newLength = approxLength * state.spaceAboveCoeff;
-      // console.log("Above", previous, "->", current, " approx:", approxHeight);
-      return newLength;
-    }, 0, { equals: equalsEpsilon(PIXELS_EPS) }),
-
+    spaceBefore: Accessor<number> = createMemo(
+      () => {
+        const approxLength = state.chunks[0].start * state.averageItemLength;
+        const newLength = approxLength * state.spaceAboveCoeff;
+        // console.log("Above", previous, "->", current, " approx:", approxHeight);
+        return newLength;
+      },
+      0,
+      { equals: equalsEpsilon(PIXELS_EPS) }
+    ),
     spaceAfter: Accessor<number> = createMemo(
       (previous) => {
         const rowsBelow = Math.max(state.total - state.lastIndex, 0);
         const newSpace = rowsBelow * state.averageItemLength;
-        console.log(
-          "Triggered space below,",
-          previous,
-          "->",
-          newSpace,
-          "will update:",
-          !withinEpsilon(previous, newSpace, PIXELS_EPS),
-          "below:",
-          rowsBelow,
-          "/",
-          state.total
-        );
+        // console.log(
+        //   "Triggered space after,",
+        //   previous,
+        //   "->",
+        //   newSpace,
+        //   "will update:",
+        //   !withinEpsilon(previous, newSpace, PIXELS_EPS),
+        //   "below:",
+        //   rowsBelow,
+        //   "/",
+        //   state.total
+        // );
         return newSpace;
       },
       0,
@@ -89,6 +131,13 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
       // does not affect the layout of what is visible as opposed to space above.
       { equals: equalsEpsilon(PIXELS_EPS) }
     ),
+    page: Accessor<number> = createMemo(() => {
+      if (state.measurements == null) {
+        return initChunkLength;
+      }
+      const { scrollViewport } = state.measurements;
+      return Math.ceil(scrollViewport / state.averageItemLength);
+    }),
 
     mutator = setStateMutator([state, setState]),
 
@@ -127,14 +176,14 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
       }
 
       // Calculate how many items we need to shift up
-      const needToCover = msrm.lowWatermark - msrm.chunkMeasurements[0].start;
+      const needToCover = state.lowWatermark - msrm.chunkMeasurements[0].start;
       const itemsToShift = Math.ceil(needToCover / msrm.measured.averageItemLength);
 
       // Calculate chunks to shift
-      const chunksToShift = Math.ceil(itemsToShift / msrm.chunkLength);
+      const chunksToShift = Math.ceil(itemsToShift / state.chunkLength);
 
       // Get chunks we can't shift
-      const fixedChunks = msrm.chunkMeasurements.filter((m) => m.start < msrm.lowWatermark);
+      const fixedChunks = msrm.chunkMeasurements.filter((m) => m.start < state.lowWatermark);
       const movableChunks = state.chunks.length - fixedChunks.length;
       const chunksToMove = Math.min(chunksToShift, movableChunks);
 
@@ -195,7 +244,7 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
       const lastChunkEnd = chunkMsrm[chunkMsrm.length - 1].end;
 
       // Calculate how much we need to cover
-      const needToCover = msrm.highWatermark - lastChunkEnd;
+      const needToCover = state.highWatermark - lastChunkEnd;
 
       // Check if we are less than half an item height below the high watermark
       if (needToCover < msrm.measured.averageItemLength * -0.5) {
@@ -212,10 +261,10 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
       );
 
       // Calculate how many chunks we need to cover the needed distance
-      const chunksNeeded = Math.max(1, Math.ceil(itemsNeeded / msrm.chunkLength));
+      const chunksNeeded = Math.max(1, Math.ceil(itemsNeeded / state.chunkLength));
 
       // Find the first chunk that intersects low watermark and therefore cannot be shifted
-      const firstUnmovable = chunkMsrm.findIndex((chkMsr) => chkMsr.end > msrm.lowWatermark);
+      const firstUnmovable = chunkMsrm.findIndex((chkMsr) => chkMsr.end > state.lowWatermark);
 
       // Calculate how many chunks are available to shift
       const chunksAvailableToShift = firstUnmovable == -1 ? state.chunks.length : firstUnmovable;
@@ -253,8 +302,7 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
         i++, toShift--
       ) {
         // Calculate items count for new chunk 
-        const newChunkCount = Math.min(total - start, msrm.chunkLength);
-        console.log("Chunk", i, "start:", start, "length:", newChunkCount, "toshift:", toShift);
+        const newChunkCount = Math.min(total - start, state.chunkLength);
         // Check if we're overlowing the total
         if (newChunkCount <= 0) {
           break;
@@ -262,14 +310,14 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
 
         // Create chunk update
         const chunkUpdate = {
-          start: start,
+          start,
           expectedItemsLength: newChunkCount * state.averageItemLength,
           measured: false,
           count: newChunkCount,
           measurements: null
         };
 
-        console.log("Chunk update", chunkUpdate);
+        console.log(`Chunk update: ${i} toShift: ${toShift}`, chunkUpdate);
 
         // Increment start
         start += newChunkCount;
@@ -306,7 +354,7 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
       const computedHeight = newStart * msrm.measured.averageItemLength;
       const newCoeff = computedHeight > 0 ? expectedHeight / computedHeight : 1.0;
 
-      mutator.selfNow({ ...msrm.measured, spaceAboveCoeff: newCoeff });
+      mutator.selfNow({ ...msrm.measured, spaceAboveCoeff: newCoeff, measurements: msrm });
       console.log(
         "New coeff", newCoeff,
         ", old: ", state.spaceBefore,
@@ -345,10 +393,14 @@ export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationC
     state,
     {
       updateViewport: (msrm: Measurements) => {
-        const { scrollIndex, page, chunkLength } = msrm;
-        const total = state.total;
-        let changed = false;
+        // Update measurements immediately to have some source data
+        if (state.measurements == null) {
+          mutator.selfNow({ measurements: msrm });
+        }
         updateChunkMeasurements(msrm);
+        const { scrollIndex } = msrm;
+        const { total, page, chunkLength } = state;
+        let changed = false;
 
         if (msrm.topIntersects && scrollIndex > 0) {
           const startDiff = scrollIndex - state.chunks[0].start;

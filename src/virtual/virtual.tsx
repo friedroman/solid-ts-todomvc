@@ -1,7 +1,14 @@
-import { JSX, batch, children, createComputed, createMemo, getOwner, onMount, runWithOwner } from "solid-js";
+import { JSX, batch, createComputed, createEffect, createMemo, getOwner, onMount, runWithOwner } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 import { For, Index } from "solid-js/web";
-import { ChunkMsrmt, ChunkProps, MeasureStats, Measurements, VirtProps } from "./virtual_types";
+import {
+  Chunk,
+  ChunkMsrmt,
+  ChunkProps,
+  MeasureStats,
+  Measurements,
+  VirtProps,
+} from "./virtual_types";
 import { createState } from "./virtual-state";
 
 /**
@@ -69,6 +76,21 @@ export function VirtualList<T>(props: VirtProps<T>): any {
     observer.observe(bottomSpace);
   });
 
+  createEffect(() => {
+    if (state.measurements == null) {
+      return;
+    }
+    const msrmts = state.measurements;
+    const chunkMsrmts = msrmts.chunkMeasurements;
+    const renderedItemsCount = chunkMsrmts.reduce((acc, c) => acc + c.count, 0);
+    const { scrollIndex } = msrmts;
+    const { lowWatermarkIndex, highWatermarkIndex, lastIndex } = state;
+    console.log(
+      `Position s:${scrollIndex} ch:${chunkMsrmts.length} r:[${state.chunks[0].start},${lastIndex}] ${renderedItemsCount},w:[${lowWatermarkIndex},${highWatermarkIndex}]`,
+      unwrap(state)
+    );
+  });
+
   function measureAndUpdate() {
     const msrm = measure();
     if (measurementsUpdated(msrm)) {
@@ -83,72 +105,75 @@ export function VirtualList<T>(props: VirtProps<T>): any {
   function measure(): Measurements {
     const top = topSpace!.getBoundingClientRect();
     const scrollRect = scroller.getBoundingClientRect();
-    const scrollOffset = top.top - scrollRect.top;
     const scrollTop = scroller.scrollTop;
-    const scrolled = scrollTop - scrollOffset;
     const scrollViewport = scroller.clientHeight;
+    const scrollerStart = scrollRect.top;
+    const scrollOffset = top.top - scrollerStart;
+    const scrolled = scrollTop - scrollOffset;
     const { measuredItemsCount, averageItemLength } = state;
     const stats: MeasureStats = { measuredItemsCount, averageItemLength };
-    const chunkMsrmts: ChunkMsrmt[] = [];
-    for (let i = 0; i < state.chunks.length; i++) {
-      const chunk = state.chunks[i];
-      const elements = chunkElements[chunk.id];
-      if (elements.length === 0) {
-        continue;
-      }
-      const first = elements[0].getBoundingClientRect();
-      const last = elements[elements.length - 1];
-      const nextStart = last.nextElementSibling!.getBoundingClientRect().top;
-      const itemsHeight = nextStart - first.top;
-      chunkMsrmts.push({
-        id: chunk.id,
-        start: chunk.start,
-        count: chunk.count,
-        startPx: first.top,
-        end: nextStart,
-        itemsLength: itemsHeight,
-      });
-      // Check if this chunk was already measured previously
-      if (chunk.measurements) {
-        continue;
-      }
-      stats.averageItemLength =
-        stats.measuredItemsCount === 0
-          ? itemsHeight / chunk.count
-          : (stats.averageItemLength * stats.measuredItemsCount + itemsHeight) /
-            (stats.measuredItemsCount + chunk.count);
-      stats.measuredItemsCount += chunk.count;
-    }
+
+    const chunkMsrmts: ChunkMsrmt[] = measureChunks(state.chunks, stats);
+
     const scrollIndex = scrolled > 0 ? Math.floor(scrolled / state.averageItemLength) : 0;
-    const page = Math.ceil(scrollViewport / stats.averageItemLength);
     const measurements: Measurements = {
       topIntersects,
       bottomIntersects,
-      lowWatermark: scrollRect.top + scrollTop - scrollViewport * margin,
-      lowWatermarkIndex: Math.max(0, Math.floor(scrollIndex - page * margin)),
-      highWatermark: scrollRect.top + scrollTop + scrollViewport * (margin + 1),
-      highWatermarkIndex: Math.ceil(scrollIndex + page * (margin + 1)),
       compensationDelta: 0,
       spaceBefore: state.spaceBefore,
       chunkMeasurements: chunkMsrmts,
       scrollOffset,
+      scrollerStart,
       scrolled,
       scrollTop,
       scrollViewport,
       scrollIndex,
-      page,
-      chunkLength: Math.ceil(page * 0.6),
-      measured: stats,
       scrollHeight: scroller.scrollHeight,
+      measured: stats,
       time: performance.now(),
     };
-    const renderedItemsCount = chunkMsrmts.reduce((acc, c) => acc + c.count, 0);
-    console.log(
-      `Position s:${scrollIndex} ch:${chunkMsrmts.length} r:[${state.chunks[0].start},${state.lastIndex}] ${renderedItemsCount},w:[${measurements.lowWatermarkIndex},${measurements.highWatermarkIndex}]`,
-      measurements,
-      unwrap(state)
-    );
     return measurements;
+
+    function measureChunks(chunks: Chunk<T>[], stats: MeasureStats) {
+      const chunkMsrmts: ChunkMsrmt[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const elements = chunkElements[chunk.id];
+        if (elements.length === 0) {
+          continue;
+        }
+        const first = elements[0].getBoundingClientRect();
+        const last = elements[elements.length - 1];
+        const nextStart = last.nextElementSibling!.getBoundingClientRect().top;
+        const itemsHeight = nextStart - first.top;
+        chunkMsrmts.push({
+          id: chunk.id,
+          start: chunk.start,
+          count: chunk.count,
+          startPx: first.top,
+          end: nextStart,
+          itemsLength: itemsHeight,
+        });
+        // Check if this chunk was already measured previously.
+        // If so, we don't need to account for it in statistics twice even if chunk length changed.
+        if (chunk.measurements) {
+          continue;
+        }
+        stats.averageItemLength =
+          stats.measuredItemsCount === 0
+            ? itemsHeight / chunk.count
+            : calculateNewAverage(itemsHeight, chunk);
+        stats.measuredItemsCount += chunk.count;
+      }
+      return chunkMsrmts;
+    }
+
+    function calculateNewAverage(itemsHeight: number, chunk: Chunk<T>): number {
+      return (
+        (stats.averageItemLength * stats.measuredItemsCount + itemsHeight) /
+        (stats.measuredItemsCount + chunk.count)
+      );
+    }
   }
 
   let measureScheduled = false,

@@ -15,20 +15,15 @@ export interface Measurements {
   topIntersects: boolean;
   bottomIntersects: boolean;
   compensationDelta: number;
+  scrollerStart: number;
   scrollOffset: number;
   scrolled: number;
-  lowWatermark: number;
-  lowWatermarkIndex: number;
   chunkMeasurements: ChunkMsrmt[];
-  highWatermark: number;
-  highWatermarkIndex: number;
   spaceBefore: number;
   scrollTop: number;
   scrollViewport: number;
   scrollHeight: number;
   scrollIndex: number;
-  page: number;
-  chunkLength: number;
   measured: MeasureStats;
   time: number;
 }
@@ -51,7 +46,7 @@ export type VirtProps<T> = {
   initItemHeight?: number;
   children: (item: () => T, index: () => number) => JSX.Element;
 };
-type Chunk<T> = {
+export type Chunk<T> = {
   id: number;
   start: number;
   expectedItemsLength: number;
@@ -68,7 +63,15 @@ export type VirtualState<T> = {
   averageItemLength: number;
   measuredItemsCount: number;
   spaceAboveCoeff: number;
+  measurements: Measurements | null;
+  lowWatermark: number;
+  lowWatermarkIndex: number;
+  highWatermark: number;
+  highWatermarkIndex: number;
+  page: number;
+  chunkLength: number;
 };
+
 export type ChunkProps<T> = {
   data: (request: Accessor<RangeRequest>) => Accessor<T[]> | Resource<T[]>;
   state: Chunk<T>;
