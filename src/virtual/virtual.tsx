@@ -1,7 +1,7 @@
-import { batch, createComputed, createMemo } from "solid-js";
+import { JSX, batch, children, createComputed, createMemo, getOwner, onMount, runWithOwner } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 import { For, Index } from "solid-js/web";
-import { ChunkMsrmt, ChunkProps, Measurements, VirtProps } from "./virtual_types";
+import { ChunkMsrmt, ChunkProps, MeasureStats, Measurements, VirtProps } from "./virtual_types";
 import { createState } from "./virtual-state";
 
 /**
@@ -10,14 +10,14 @@ import { createState } from "./virtual-state";
  */
 function Chunk<T>(props: ChunkProps<T>) {
   const [state, set] = createStore(props.state);
-  const key = createMemo(() => ({ from: state.start, length: state.length }));
+  const key = createMemo(() => ({ from: state.start, length: state.count }));
   createComputed(() => {
     key();
     set("measured", false);
   });
   return (
     <Index
-      fallback={<li class="virtual-row" style={{ height: `${state.itemsHeight}px` }} />}
+      fallback={<li class="virtual-row" style={{ height: `${state.expectedItemsLength}px` }} />}
       each={props.data(key)()}>
       {(item, index) => props.children(item, () => index + state.start)}
     </Index>
@@ -38,35 +38,13 @@ export function VirtualList<T>(props: VirtProps<T>): any {
   const margin = props.margin ?? 0.5;
   let topSpace: ElementRef;
   let bottomSpace: ElementRef;
-  const chunks: HTMLElement[][] = [];
+  const chunkElements: HTMLElement[][] = [];
   const scroller = document.scrollingElement!;
   let topIntersects = false;
   let bottomIntersects = false;
+  const Owner = getOwner();
 
-  const [state, { jump, shiftDown, shiftUp, updateVirtualSpaces }] = createState<T>(props);
-
-  function updateViewport(msrm: Measurements) {
-    const { scrollIndex, page, chunkLength } = msrm;
-    const total = state.total;
-
-    if (topIntersects && scrollIndex > 0) {
-      const startDiff = scrollIndex - state.chunks[0].start;
-      const jumpDetected = startDiff < page * -state.chunks.length;
-      if (jumpDetected) {
-        const start = scrollIndex < page ? 0 : scrollIndex - page;
-        jump(start, chunkLength);
-      } else {
-        shiftUp();
-      }
-    }
-    batch(() => {
-      if (bottomIntersects && state.lastIndex !== total) {
-        console.log("Shift down");
-        shiftDown(msrm);
-      }
-      updateVirtualSpaces(msrm);
-    });
-  }
+  const [state, { updateViewport }] = createState<T>(props);
 
   const intersectCallback: IntersectionObserverCallback = (entries) => {
       entries.forEach((entry) => {
@@ -78,20 +56,29 @@ export function VirtualList<T>(props: VirtProps<T>): any {
       });
       console.log("Intersect", topIntersects, bottomIntersects, entries);
       cancelMeasure();
-      const msrm = measure();
-      updateViewport(msrm);
-      scheduleMeasure();
+      measureAndUpdate();
     },
     observer = new IntersectionObserver(intersectCallback, {
       rootMargin: `${margin * 100}% 0px`,
     });
-  void Promise.resolve().then(() => {
+  onMount(() => {
     if (!topSpace || !bottomSpace) {
       throw new Error("Top or bottom space ref is not initialized");
     }
     observer.observe(topSpace);
     observer.observe(bottomSpace);
   });
+
+  function measureAndUpdate() {
+    const msrm = measure();
+    if (measurementsUpdated(msrm)) {
+      scheduleMeasure();
+    }
+  }
+
+  function measurementsUpdated(msrm: Measurements): boolean | undefined {
+    return runWithOwner(Owner, () => batch(() => updateViewport(msrm)));
+  }
 
   function measure(): Measurements {
     const top = topSpace!.getBoundingClientRect();
@@ -100,12 +87,12 @@ export function VirtualList<T>(props: VirtProps<T>): any {
     const scrollTop = scroller.scrollTop;
     const scrolled = scrollTop - scrollOffset;
     const scrollViewport = scroller.clientHeight;
-    const { measuredItemsCount, averageHeight } = state;
-    const measured = { measuredItemsCount, averageHeight };
+    const { measuredItemsCount, averageItemLength } = state;
+    const stats: MeasureStats = { measuredItemsCount, averageItemLength };
     const chunkMsrmts: ChunkMsrmt[] = [];
     for (let i = 0; i < state.chunks.length; i++) {
       const chunk = state.chunks[i];
-      const elements = chunks[i];
+      const elements = chunkElements[chunk.id];
       if (elements.length === 0) {
         continue;
       }
@@ -115,25 +102,28 @@ export function VirtualList<T>(props: VirtProps<T>): any {
       const itemsHeight = nextStart - first.top;
       chunkMsrmts.push({
         id: chunk.id,
-        startIndex: chunk.start,
-        length: chunk.length,
-        start: first.top,
+        start: chunk.start,
+        count: chunk.count,
+        startPx: first.top,
         end: nextStart,
-        itemsHeight,
+        itemsLength: itemsHeight,
       });
-      if (chunk.measured) {
+      // Check if this chunk was already measured previously
+      if (chunk.measurements) {
         continue;
       }
-      measured.averageHeight =
-        measured.measuredItemsCount === 0
-          ? itemsHeight / chunk.length
-          : (measured.averageHeight * measured.measuredItemsCount + itemsHeight) /
-            (measured.measuredItemsCount + chunk.length);
-      measured.measuredItemsCount += chunk.length;
+      stats.averageItemLength =
+        stats.measuredItemsCount === 0
+          ? itemsHeight / chunk.count
+          : (stats.averageItemLength * stats.measuredItemsCount + itemsHeight) /
+            (stats.measuredItemsCount + chunk.count);
+      stats.measuredItemsCount += chunk.count;
     }
-    const scrollIndex = scrolled > 0 ? Math.floor(scrolled / state.averageHeight) : 0;
-    const page = Math.ceil(scrollViewport / measured.averageHeight);
+    const scrollIndex = scrolled > 0 ? Math.floor(scrolled / state.averageItemLength) : 0;
+    const page = Math.ceil(scrollViewport / stats.averageItemLength);
     const measurements: Measurements = {
+      topIntersects,
+      bottomIntersects,
       lowWatermark: scrollRect.top + scrollTop - scrollViewport * margin,
       lowWatermarkIndex: Math.max(0, Math.floor(scrollIndex - page * margin)),
       highWatermark: scrollRect.top + scrollTop + scrollViewport * (margin + 1),
@@ -147,13 +137,14 @@ export function VirtualList<T>(props: VirtProps<T>): any {
       scrollViewport,
       scrollIndex,
       page,
-      chunkLength: Math.ceil(page * 0.3),
-      measured,
+      chunkLength: Math.ceil(page * 0.6),
+      measured: stats,
       scrollHeight: scroller.scrollHeight,
       time: performance.now(),
     };
+    const renderedItemsCount = chunkMsrmts.reduce((acc, c) => acc + c.count, 0);
     console.log(
-      `Position s:${scrollIndex} r:[${state.chunks[0].start},${state.lastIndex}],w:[${measurements.lowWatermarkIndex},${measurements.highWatermarkIndex}]`,
+      `Position s:${scrollIndex} ch:${chunkMsrmts.length} r:[${state.chunks[0].start},${state.lastIndex}] ${renderedItemsCount},w:[${measurements.lowWatermarkIndex},${measurements.highWatermarkIndex}]`,
       measurements,
       unwrap(state)
     );
@@ -177,16 +168,14 @@ export function VirtualList<T>(props: VirtProps<T>): any {
     measureScheduled = true;
     rafId = requestAnimationFrame((time1) => {
       console.log("Measure 1", time1);
-      const measurements1 = measure();
-      updateViewport(measurements1);
+      measureAndUpdate();
       rafId = requestAnimationFrame((time2) => {
         console.log("Measure 2", time1, time2);
         if (!measureScheduled) {
           return;
         }
         measureScheduled = false;
-        const measurements2 = measure();
-        updateViewport(measurements2);
+        measureAndUpdate();
       });
     });
   }
@@ -196,11 +185,20 @@ export function VirtualList<T>(props: VirtProps<T>): any {
       <li ref={topSpace} class="virtual-space-above" style={{ height: `${state.spaceBefore}px` }} />
       <li class="virtual-parity" />
       <For each={state.chunks}>
-        {(chunkState) => (
-          <Chunk state={chunkState} data={props.data}>
-            {props.children}
-          </Chunk>
-        )}
+        {(chunkState) => {
+           const ch = (
+             <Chunk state={chunkState} data={props.data}>
+               {props.children}
+             </Chunk>
+           );
+
+          return (() => {
+            const chunk = ch as unknown as () => HTMLElement[];
+            const elements = chunk();
+            chunkElements[chunkState.id] = elements;
+            return elements;
+          }) as unknown as JSX.Element;
+        }}
       </For>
       <li
         ref={bottomSpace}

@@ -1,209 +1,374 @@
-import { batch, createComputed, createMemo, createSignal } from "solid-js";
+import { Accessor, batch, createComputed, createEffect, createMemo, createSignal, on } from "solid-js";
 import { createStore, Store, unwrap } from "solid-js/store";
-import { For, Index } from "solid-js/web";
 import { setStateMutator } from "../utils/set";
-import { ChunkMsrmt, ChunkProps, Measurements, VirtProps, VirtualState } from "./virtual_types";
+import { ChunkMsrmt, Measurements, VirtProps, VirtualState } from "./virtual_types";
+import { equalsEpsilon, withinEpsilon } from "./equalsEpsilon";
 
 type MutationCommands = {
-  jump: (startIndex: number, chunkLength: number) => void;
-  shiftUp: () => void;
-  shiftDown: (msrm: Measurements) => void;
-  updateVirtualSpaces: (msrm: Measurements) => void;
+  updateViewport: (msrm: Measurements) => boolean;
 };
+
+const PIXELS_EPS = 0.01;
 
 export function createState<T>(props: VirtProps<T>): [VirtualState<T>, MutationCommands] {
   let chunkId = 1;
   const initChunkLength = props.initChunkLength ?? 10;
   const initItemHeight = props.initItemHeight ?? 80;
   const [state, setState] = createStore<VirtualState<T>>({
-      averageHeight: initItemHeight,
-      measuredItemsCount: 0,
-      spaceAboveCoeff: 1,
-      chunks: [
-        {
-          id: 0,
-          start: 0,
-          length: initChunkLength,
-          itemsHeight: initChunkLength * initItemHeight,
-          measured: false,
-        },
-      ],
-      get spaceBefore() {
-        return spaceBefore();
+    averageItemLength: initItemHeight,
+    measuredItemsCount: 0,
+    spaceAboveCoeff: 1,
+    chunks: [
+      {
+        id: 0,
+        start: 0,
+        count: initChunkLength,
+        expectedItemsLength: initChunkLength * initItemHeight,
+        measured: false,
+        measurements: null
       },
-      get nextChunkStartIndex() {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-        const st = this as Store<VirtualState<T>>;
-        const lastIdx = st.chunks.length - 1;
-        const chunk = st.chunks[lastIdx];
-        return chunk.start + chunk.length;
-      },
-      get total() {
-        return props.total() ?? 0;
-      },
-      get spaceAfter() {
-        return spaceBelow();
-      },
-      get lastIndex() {
-        const chunk = this.chunks[this.chunks.length - 1];
-        return chunk.start + chunk.length;
-      },
-    }),
-    spaceBefore: () => number = createMemo((previous) => {
-      const approxHeight = state.chunks[0].start * state.averageHeight;
-      const current = approxHeight * state.spaceAboveCoeff;
-      console.log("Above", previous, "->", current, " approx:", approxHeight);
-      return current;
-    }),
-    spaceBelow: () => number = createMemo((previous) => {
-      const rowsBelow = Math.max(state.total - state.lastIndex, 0);
-      const newSpace = rowsBelow * state.averageHeight;
-      // eslint-disable-next-line prettier/prettier
-      console.log("Updating space below", previous, "->", newSpace, "below:", rowsBelow, "/", state.total);
-      return newSpace;
-    }, 0),
-    mutator = setStateMutator([state, setState]);
-  createComputed(() => {
-    if (state.total == null || state.total >= state.lastIndex) {
-      return;
-    }
-    console.error("Total is less than last index, total", state.total, ", last: ", state.lastIndex);
-    let offset = (state.total ?? 0) - state.lastIndex;
-    for (let i = state.chunks.length - 1; i >= 0 && offset > 0; i--) {
-      const length = state.chunks[i].length;
-      if (length <= offset && i > 0) {
-        mutator.set(
-          (s) => s.chunks,
-          (chunks) => chunks.slice(0, chunks.length - 1)
-        );
-        offset -= length;
-      } else {
-        mutator.set((s) => s.chunks[i].length, length - offset);
-      }
-    }
-    mutator.engage();
+    ],
+    get spaceBefore() {
+      return spaceBefore();
+    },
+    get total() {
+      return props.total() ?? 0;
+    },
+    get spaceAfter() {
+      return spaceAfter();
+    },
+    get lastIndex() {
+      return lastIndex();
+    },
   });
+  createEffect(()=> {
+    console.log("Space after", state.spaceAfter, "space before", state.spaceBefore);
+  });
+  const lastIndex: Accessor<number> = createMemo(() => {
+      // console.log("Last Index memo");
+      const chks = state.chunks,
+        length = chks.length,
+        ch = chks[length - 1];
+      if (length == 0) {
+        return 0;
+      }
+      if (ch == null) {
+        return 0;
+      }
+      const last = ch.start + ch.count - 1;
+      console.log("lastIndex: ", last, ", chunk: ", unwrap(ch), "chunks count:", chks.length);
+      return last;
+    }),
+    spaceBefore: Accessor<number> = createMemo((previous) => {
+      const approxLength = state.chunks[0].start * state.averageItemLength;
+      const newLength = approxLength * state.spaceAboveCoeff;
+      // console.log("Above", previous, "->", current, " approx:", approxHeight);
+      return newLength;
+    }, 0, { equals: equalsEpsilon(PIXELS_EPS) }),
+
+    spaceAfter: Accessor<number> = createMemo(
+      (previous) => {
+        const rowsBelow = Math.max(state.total - state.lastIndex, 0);
+        const newSpace = rowsBelow * state.averageItemLength;
+        console.log(
+          "Triggered space below,",
+          previous,
+          "->",
+          newSpace,
+          "will update:",
+          !withinEpsilon(previous, newSpace, PIXELS_EPS),
+          "below:",
+          rowsBelow,
+          "/",
+          state.total
+        );
+        return newSpace;
+      },
+      0,
+      // Suppress propagation of small changes in the space below height as it is not visible and
+      // does not affect the layout of what is visible as opposed to space above.
+      { equals: equalsEpsilon(PIXELS_EPS) }
+    ),
+
+    mutator = setStateMutator([state, setState]),
+
+    jump = (startIndex: number, chunkLength: number) => {
+      console.log("Jump", startIndex, chunkLength);
+      for (
+        let i = 0, chunkStart = startIndex;
+        i < state.chunks.length;
+        i++, chunkStart += chunkLength
+      ) {
+        const edge = chunkStart + chunkLength >= state.total;
+        const len = edge ? state.total - chunkStart : chunkLength;
+        mutator.set((s) => s.chunks[i], {
+          start: chunkStart,
+          count: len,
+          measurements: null,
+        });
+        if (edge) {
+          console.warn("Edge on jump up");
+          mutator.set(
+            (s) => s.chunks,
+            (chs) => chs.slice(0, i + 1)
+          );
+          break;
+        }
+      }
+    },
+
+    shiftUp = (msrm: Measurements) => {
+      // Calculate index we're shifting from
+      const lastIndex = state.lastIndex;
+
+      // If we're already at 0, exit
+      if (lastIndex === 0) {
+        return false;
+      }
+
+      // Calculate how many items we need to shift up
+      const needToCover = msrm.lowWatermark - msrm.chunkMeasurements[0].start;
+      const itemsToShift = Math.ceil(needToCover / msrm.measured.averageItemLength);
+
+      // Calculate chunks to shift
+      const chunksToShift = Math.ceil(itemsToShift / msrm.chunkLength);
+
+      // Get chunks we can't shift
+      const fixedChunks = msrm.chunkMeasurements.filter((m) => m.start < msrm.lowWatermark);
+      const movableChunks = state.chunks.length - fixedChunks.length;
+      const chunksToMove = Math.min(chunksToShift, movableChunks);
+
+      // Shift chunks
+      if (chunksToMove > 0) {
+        mutator.setNow(
+          (s) => s.chunks,
+          (chunks) => {
+            const shifted = chunks.slice(-chunksToMove);
+            return shifted.concat(chunks.slice(0, -chunksToMove));
+          }
+        );
+      }
+
+      // Update shifted chunk data
+      let itemsShifted = 0;
+      for (let i = 0; i < chunksToMove; i++) {
+        const chunkIndex = state.chunks.length - chunksToMove + i;
+        const chunk = state.chunks[chunkIndex];
+        const newStart = chunk.start - itemsToShift;
+        const newLength = Math.max(0, chunk.count - itemsShifted);
+
+        mutator.setNow((s) => s.chunks[chunkIndex], {
+          ...chunk,
+          start: newStart,
+          count: newLength,
+          measurements: null,
+        });
+
+        itemsShifted += chunk.count - newLength;
+        if (itemsShifted >= itemsToShift) {
+          break;
+        }
+      }
+      return true;
+    },
+
+    /**
+     * A function to shift down some of the existing chunks or create new ones to devirtualize the space below.
+     * Takes msrm to calculate how much space we need to fill below in order to have enough rows rendered to hit the high watermark.
+     */
+    shiftDown = (msrm: Measurements) => {
+      // Get start index for the chunks about to be shifted down or created
+      const startIndex = state.lastIndex + 1;
+      const total = state.total;
+      // Calculate how many items below are currently virtualized and not rendered
+      const itemsLeft = total - startIndex;
+
+      // Check if we are at the last item
+      if (itemsLeft <= 0) {
+        console.log("Last item, no need to shift");
+        // If so, exit early
+        return false;
+      }
+
+      // Get the end of the last rendered chunk from measurements
+      const chunkMsrm = msrm.chunkMeasurements;
+      const lastChunkEnd = chunkMsrm[chunkMsrm.length - 1].end;
+
+      // Calculate how much we need to cover
+      const needToCover = msrm.highWatermark - lastChunkEnd;
+
+      // Check if we are less than half an item height below the high watermark
+      if (needToCover < msrm.measured.averageItemLength * -0.5) {
+        // If not, log and exit
+        console.log("No need to cover", needToCover);
+        return false;
+      }
+      console.log("Need to cover: ", needToCover);
+
+      // Calculate number of items needed to cover the distance
+      const itemsNeeded = Math.max(
+        1,
+        Math.min(itemsLeft, Math.ceil(needToCover / msrm.measured.averageItemLength))
+      );
+
+      // Calculate how many chunks we need to cover the needed distance
+      const chunksNeeded = Math.max(1, Math.ceil(itemsNeeded / msrm.chunkLength));
+
+      // Find the first chunk that intersects low watermark and therefore cannot be shifted
+      const firstUnmovable = chunkMsrm.findIndex((chkMsr) => chkMsr.end > msrm.lowWatermark);
+
+      // Calculate how many chunks are available to shift
+      const chunksAvailableToShift = firstUnmovable == -1 ? state.chunks.length : firstUnmovable;
+
+      // Find out how many chunks we will actually shift
+      const chunksToShift = Math.min(chunksNeeded, chunksAvailableToShift);
+
+      // Calculate chunks untouched
+      const chunksUntouched = state.chunks.length - chunksToShift;
+
+      // Log calculations
+      console.log(
+        "Diff:",
+        itemsNeeded,
+        "Needed:",
+        chunksNeeded,
+        "Available:",
+        chunksAvailableToShift,
+        "ToShift:",
+        chunksToShift
+      );
+
+      // Shift existing chunks if needed
+      if (chunksToShift > 0) {
+        mutator.setNow(
+          (s) => s.chunks,
+          (chunks) => chunks.slice(chunksToShift).concat(chunks.slice(0, chunksToShift))
+        );
+      }
+
+      // Iterate to add new chunks or update shifted ones
+      for (
+        let i = 0, start = startIndex, toShift = chunksToShift;
+        i < chunksNeeded && i < 6;
+        i++, toShift--
+      ) {
+        // Calculate items count for new chunk 
+        const newChunkCount = Math.min(total - start, msrm.chunkLength);
+        console.log("Chunk", i, "start:", start, "length:", newChunkCount, "toshift:", toShift);
+        // Check if we're overlowing the total
+        if (newChunkCount <= 0) {
+          break;
+        }
+
+        // Create chunk update
+        const chunkUpdate = {
+          start: start,
+          expectedItemsLength: newChunkCount * state.averageItemLength,
+          measured: false,
+          count: newChunkCount,
+          measurements: null
+        };
+
+        console.log("Chunk update", chunkUpdate);
+
+        // Increment start
+        start += newChunkCount;
+
+        // Check if shifting existing chunk
+        if (toShift > 0) {
+          // Get index
+          const index = i + chunksUntouched;
+          const ch = state.chunks[index];
+
+          // Update compensation delta
+          msrm.compensationDelta += ch.measurements?.itemsLength ?? ch.expectedItemsLength;
+
+          // Update existing chunk
+          mutator.setNow((s) => s.chunks[index], chunkUpdate);
+        } else {
+          // Otherwise add new chunk
+          mutator.setNow(
+            (s) => s.chunks,
+            (chunks) =>
+              chunks.concat({
+                id: chunkId++,
+                ...chunkUpdate,
+              })
+          );
+        }
+      }
+      return true;
+    },
+
+    updateVirtualSpaces = (msrm: Measurements) => {
+      const expectedHeight = msrm.spaceBefore + msrm.compensationDelta;
+      const newStart = state.chunks[0].start;
+      const computedHeight = newStart * msrm.measured.averageItemLength;
+      const newCoeff = computedHeight > 0 ? expectedHeight / computedHeight : 1.0;
+
+      mutator.selfNow({ ...msrm.measured, spaceAboveCoeff: newCoeff });
+      console.log(
+        "New coeff", newCoeff,
+        ", old: ", state.spaceBefore,
+        ", computed: ", computedHeight,
+        ", expected: ", expectedHeight,
+      );
+    };
+  // createComputed(() => {
+  //   if (state.total == null || state.total >= state.lastIndex) {
+  //     return;
+  //   }
+  //   console.error("Total is less than last index, total", state.total, ", last: ", state.lastIndex);
+  //   let offset = (state.total ?? 0) - state.lastIndex;
+  //   for (let i = state.chunks.length - 1; i >= 0 && offset > 0; i--) {
+  //     const length = state.chunks[i].count;
+  //     if (length <= offset && i > 0) {
+  //       mutator.set(
+  //         (s) => s.chunks,
+  //         (chunks) => chunks.slice(0, chunks.length - 1)
+  //       );
+  //       offset -= length;
+  //     } else {
+  //       mutator.set((s) => s.chunks[i].count, length - offset);
+  //     }
+  //   }
+  //   mutator.engage();
+  // });
+
+  const updateChunkMeasurements = (msrmts: Measurements) => {
+    msrmts.chunkMeasurements.forEach((msrm, i) => {
+      mutator.setNow((s) => s.chunks[i].measurements, msrm);
+    })
+  }
 
   return [
     state,
     {
-      jump: (startIndex: number, chunkLength: number) => {
-        console.log("Jump", startIndex, chunkLength);
-        for (
-          let i = 0, chunkStart = startIndex;
-          i < state.chunks.length;
-          i++, chunkStart += chunkLength
-        ) {
-          const edge = chunkStart + chunkLength >= state.total;
-          const len = edge ? state.total - chunkStart : chunkLength;
-          mutator.set((s) => s.chunks[i], {
-            start: chunkStart,
-            length: len,
-            measured: false,
-          });
-          if (edge) {
-            console.warn("Edge on jump up");
-            mutator.set(
-              (s) => s.chunks,
-              (chs) => chs.slice(0, i + 1)
-            );
-            break;
-          }
-        }
-      },
-      shiftUp: () => {
-        // TODO: shiftUp logic using state and mutator
-      },
-      shiftDown: (msrm: Measurements) => {
-        const startIndex = state.lastIndex;
+      updateViewport: (msrm: Measurements) => {
+        const { scrollIndex, page, chunkLength } = msrm;
         const total = state.total;
-        const itemsLeft = total - startIndex;
-        if (startIndex === total - 1) {
-          return;
-        }
+        let changed = false;
+        updateChunkMeasurements(msrm);
 
-        const chunkMsrm = msrm.chunkMeasurements;
-        const needToCover = msrm.highWatermark - chunkMsrm[chunkMsrm.length - 1].end;
-        if (needToCover < msrm.measured.averageHeight * -0.5) {
-          console.log("No need to cover", needToCover);
-          return;
-        }
-        const diff = Math.max(
-          1,
-          Math.min(itemsLeft, Math.ceil(needToCover / msrm.measured.averageHeight))
-        );
-        const chunksNeeded = Math.max(1, Math.ceil(diff / msrm.chunkLength));
-        const firstUnmovable = chunkMsrm.findIndex((chkMsr) => chkMsr.end > msrm.lowWatermark);
-        const chunksAvailableToShift = firstUnmovable == -1 ? state.chunks.length : firstUnmovable;
-        const chunksToShift = Math.min(chunksNeeded, chunksAvailableToShift);
-        const chunksUntouched = state.chunks.length - chunksToShift;
-        console.log(
-          "Diff:",
-          diff,
-          "Needed:",
-          chunksNeeded,
-          "Available:",
-          chunksAvailableToShift,
-          "ToShift:",
-          chunksToShift
-        );
-
-        if (chunksToShift > 0) {
-          mutator.setNow(
-            (s) => s.chunks,
-            (chunks) => chunks.slice(chunksToShift).concat(chunks.slice(0, chunksToShift))
-          );
-        }
-        for (
-          let i = 0, start = startIndex, toShift = chunksToShift;
-          i < chunksNeeded && i < 5;
-          i++, toShift--
-        ) {
-          const newLength = Math.min(total - start, msrm.chunkLength);
-          if (newLength <= 0) {
-            break;
-          }
-          const chunkUpdate = {
-            start: start,
-            itemsHeight: newLength * state.averageHeight,
-            measured: false,
-            length: newLength,
-          };
-          start += newLength;
-          if (toShift > 0) {
-            //we're updating an already shifted chunk with its new start index and length
-            const index = i + chunksUntouched;
-            //add compensation delta to be applied later to virtual space above
-            //to adjust for change in height and scroll position
-            msrm.compensationDelta += state.chunks[i].itemsHeight;
-            mutator.setNow((s) => s.chunks[index], chunkUpdate);
+        if (msrm.topIntersects && scrollIndex > 0) {
+          const startDiff = scrollIndex - state.chunks[0].start;
+          const jumpDetected = startDiff < page * -state.chunks.length;
+          if (jumpDetected) {
+            const start = scrollIndex < page ? 0 : scrollIndex - page;
+            changed = true;
+            jump(start, chunkLength);
           } else {
-            //we're adding a new chunk
-            mutator.setNow(
-              (s) => s.chunks,
-              (chunks) =>
-                chunks.concat({
-                  id: chunkId++,
-                  ...chunkUpdate,
-                })
-            );
+            console.log("Shift up");
+            // changed = shiftUp(msrm);
           }
         }
-      },
-      updateVirtualSpaces: (msrm: Measurements) => {
-        const expectedHeight = msrm.spaceBefore + msrm.compensationDelta;
-        const startIndex = unwrap(state).chunks[0].start;
-        const computedHeight = startIndex * msrm.measured.averageHeight;
-        const newCoeff = startIndex > 0 ? expectedHeight / computedHeight : 1.0;
-        mutator.selfNow({ ...msrm.measured, spaceAboveCoeff: newCoeff });
-        console.log(
-          "New coeff, height, comp, space",
-          newCoeff,
-          expectedHeight,
-          computedHeight,
-          state.spaceBefore
-        );
-      },
+        if (msrm.bottomIntersects && state.lastIndex !== total) {
+          console.log("Shift down");
+          changed = shiftDown(msrm);
+        }
+        updateVirtualSpaces(msrm);
+        return changed;
+      }
     },
   ];
 }

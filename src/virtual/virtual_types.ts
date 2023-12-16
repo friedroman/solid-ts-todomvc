@@ -6,7 +6,14 @@ export interface RangeRequest {
   length: number;
 }
 
+export interface MeasureStats {
+  measuredItemsCount: number;
+  averageItemLength: number;
+}
+
 export interface Measurements {
+  topIntersects: boolean;
+  bottomIntersects: boolean;
   compensationDelta: number;
   scrollOffset: number;
   scrolled: number;
@@ -22,17 +29,17 @@ export interface Measurements {
   scrollIndex: number;
   page: number;
   chunkLength: number;
-  measured: { measuredItemsCount: number; averageHeight: number };
+  measured: MeasureStats;
   time: number;
 }
 
 export interface ChunkMsrmt {
   id: number;
-  startIndex: number;
-  length: number;
+  count: number;
   start: number;
+  startPx: number;
   end: number;
-  itemsHeight: number;
+  itemsLength: number;
 }
 
 export type VirtProps<T> = {
@@ -47,18 +54,18 @@ export type VirtProps<T> = {
 type Chunk<T> = {
   id: number;
   start: number;
-  itemsHeight: number;
-  length: number;
+  expectedItemsLength: number;
+  measurements: ChunkMsrmt | null;
+  count: number;
   measured: boolean;
 };
 export type VirtualState<T> = {
   spaceBefore: number;
   spaceAfter: number;
-  nextChunkStartIndex: number;
   total: number;
   chunks: Chunk<T>[];
   lastIndex: number;
-  averageHeight: number;
+  averageItemLength: number;
   measuredItemsCount: number;
   spaceAboveCoeff: number;
 };

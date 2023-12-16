@@ -76,38 +76,41 @@ export default function createTodosStore(): [Store, Actions] {
     state,
     {
       setListMode: (mode) => mut.setNow((s) => s.listMode, mode),
-      addTodo: (todo) =>
-        mut
-          .set(
-            (s) => s.counter,
-            (c) => ++c
-          )
-          .set(
-            (s) => s.todos,
-            (t) => [...t, { id: state.counter, ...todo }]
-          )
-          .engage(),
+      addTodo: (todo) => {
+        mut.set((s) => s.counter, (c) => ++c,);
+        mut.set((s) => s.todos, (t) => [...t, { id: state.counter, ...todo }]);
+        mut.engage();
+      },
       removeTodo: (todoId) =>
         mut.setNow(
           (s) => s.todos,
-          (t) => t.filter((item) => item.id !== todoId)
+          (t) => t.filter((item) => item.id !== todoId),
         ),
-      editTodo: (todo) => mut.setNow<Todo>((s) => s.todos.$filter((t) => t.id, todo.id), todo),
+      editTodo: (todo) =>
+        mut.setNow<Todo>((s) => s.todos.$filter((t) => t.id, todo.id), todo),
       clearCompleted: () =>
         mut.setNow(
           (s) => s.todos,
-          (t) => t.filter((todo) => !todo.completed)
+          (t) => t.filter((todo) => !todo.completed),
         ),
-      toggleAll: (completed) => mut.setNow((s) => s.todos.$all.completed, completed),
+      toggleAll: (completed) =>
+        mut.setNow((s) => s.todos.$all.completed, completed),
       setVisibility: (showMode) => mut.setNow((s) => s.showMode, showMode),
       generateTodos: (index, count) => {
         const generated = new Array<Todo>(count);
         let counter = state.counter;
         for (let i = 0; i < count; i++) {
-          generated[i] = { id: counter++, completed: false, title: lorem.generateParagraphs(1) };
+          generated[i] = {
+            id: counter++,
+            completed: false,
+            title: lorem.generateParagraphs(1),
+          };
         }
-        setState("counter", counter);
-        setState("todos", (todos) => todos.slice(0, index).concat(generated, todos.slice(index))
+        mut.setNow((s) => s.counter, counter);
+        mut.setNow(
+          (s) => s.todos,
+          (todos) =>
+            todos.slice(0, index).concat(generated, todos.slice(index)),
         );
       },
     },
